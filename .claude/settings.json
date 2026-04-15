@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install)",
+      "Bash(npm run build)",
+      "Bash(npm run dev)",
+      "Bash(npm run typecheck)",
+      "Bash(npm test)",
+      "Bash(npm run lint)",
+      "Bash(npm run audit)",
+      "Bash(npx tsc:*)",
+      "Bash(npx vitest:*)"
+    ],
+    "deny": [
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(cat .env)",
+      "Bash(cat .env.local)",
+      "Bash(git push:*)",
+      "Bash(git push --force:*)",
+      "Read(.env)",
+      "Read(.env.local)"
+    ]
+  }
+}

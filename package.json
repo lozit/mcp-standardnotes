@@ -1,0 +1,47 @@
+{
+  "name": "mcp-standardnotes",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MCP server for Standard Notes with E2EE (protocol 004)",
+  "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lozit/mcp-standardnotes.git"
+  },
+  "type": "module",
+  "bin": {
+    "mcp-standardnotes": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "login": "tsx src/cli/login.ts",
+    "diag": "tsx src/cli/diag.ts",
+    "dump-note": "tsx src/cli/dump-note.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src --ext .ts",
+    "audit": "npm audit --audit-level=high"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "keytar": "^7.9.0",
+    "libsodium-wrappers-sumo": "^0.7.13",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/libsodium-wrappers-sumo": "^0.7.8",
+    "@types/node": "^20.14.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "tsx": "^4.15.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
