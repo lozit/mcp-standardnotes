@@ -46,3 +46,14 @@ export interface Tag {
   updatedAt: string;
   noteUuids: string[];
 }
+
+export interface VaultStats {
+  notes: { total: number; active: number; trashed: number };
+  tags: number;
+  byNoteType: Record<string, number>;
+  totalTextBytes: number;
+  averageTextBytes: number;
+  largest: { uuid: string; title: string; bytes: number } | null;
+  oldest: { uuid: string; title: string; createdAt: string } | null;
+  newest: { uuid: string; title: string; updatedAt: string } | null;
+}

@@ -17,7 +17,14 @@ import {
   type TagReference,
 } from "./protocol004.js";
 import { loadSession, saveSession, type StoredSession } from "./session.js";
-import type { Note, NoteSummary, NoteType, Tag, TagSummary } from "./types.js";
+import type {
+  Note,
+  NoteSummary,
+  NoteType,
+  Tag,
+  TagSummary,
+  VaultStats,
+} from "./types.js";
 import { fromHex, toHex } from "./crypto.js";
 
 export interface SnClient {
@@ -25,7 +32,9 @@ export interface SnClient {
     limit: number;
     offset: number;
     includeTrashed: boolean;
+    tag?: string;
   }): Promise<NoteSummary[]>;
+  stats(): Promise<VaultStats>;
   searchNotes(query: string, limit: number): Promise<NoteSummary[]>;
   getNote(uuid: string): Promise<Note | null>;
   createNote(input: {
@@ -568,11 +577,71 @@ function buildClient(state: ClientState): SnClient {
   };
 
   return {
-    async listNotes({ limit, offset, includeTrashed }) {
+    async listNotes({ limit, offset, includeTrashed, tag }) {
+      let allowedNoteUuids: Set<string> | null = null;
+      if (tag !== undefined && tag !== "") {
+        const matched =
+          state.tagsCache.get(tag) ??
+          [...state.tagsCache.values()].find(
+            (t) => t.title.toLowerCase() === tag.toLowerCase(),
+          );
+        if (!matched) {
+          throw new Error(`Tag not found: ${tag}`);
+        }
+        allowedNoteUuids = new Set(
+          matched.references
+            .filter((r) => r.content_type === "Note")
+            .map((r) => r.uuid),
+        );
+      }
       const all = [...state.notesCache.values()]
         .filter((n) => includeTrashed || !n.trashed)
+        .filter((n) => !allowedNoteUuids || allowedNoteUuids.has(n.uuid))
         .sort((a, b) => b.updated_at_timestamp - a.updated_at_timestamp);
       return all.slice(offset, offset + limit).map(toSummary);
+    },
+
+    async stats() {
+      const notes = [...state.notesCache.values()];
+      const active = notes.filter((n) => !n.trashed);
+      const byNoteType: Record<string, number> = {};
+      let totalTextBytes = 0;
+      let largest: VaultStats["largest"] = null;
+      let oldestTs = Infinity;
+      let oldest: VaultStats["oldest"] = null;
+      let newestTs = -Infinity;
+      let newest: VaultStats["newest"] = null;
+      for (const n of active) {
+        byNoteType[n.noteType] = (byNoteType[n.noteType] ?? 0) + 1;
+        const bytes = Buffer.byteLength(n.text, "utf8");
+        totalTextBytes += bytes;
+        if (!largest || bytes > largest.bytes) {
+          largest = { uuid: n.uuid, title: n.title, bytes };
+        }
+        if (n.created_at_timestamp > 0 && n.created_at_timestamp < oldestTs) {
+          oldestTs = n.created_at_timestamp;
+          oldest = { uuid: n.uuid, title: n.title, createdAt: n.createdAt };
+        }
+        if (n.updated_at_timestamp > newestTs) {
+          newestTs = n.updated_at_timestamp;
+          newest = { uuid: n.uuid, title: n.title, updatedAt: n.updatedAt };
+        }
+      }
+      return {
+        notes: {
+          total: notes.length,
+          active: active.length,
+          trashed: notes.length - active.length,
+        },
+        tags: state.tagsCache.size,
+        byNoteType,
+        totalTextBytes,
+        averageTextBytes:
+          active.length === 0 ? 0 : Math.round(totalTextBytes / active.length),
+        largest,
+        oldest,
+        newest,
+      };
     },
 
     async searchNotes(query, limit) {

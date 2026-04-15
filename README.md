@@ -19,8 +19,9 @@ Ask Claude to summarize your notes, draft new ones, organize tags, search across
 
 | Tool | What it does |
 |------|---|
-| `notes_list` / `notes_search` / `notes_get` | Browse and search your notes |
+| `notes_list` / `notes_search` / `notes_get` | Browse and search your notes (filter by tag with `tag: "<uuid-or-title>"`) |
 | `notes_create` / `notes_update` / `notes_delete` | Write notes (markdown, super, code, rich-text, task, spreadsheet, plain-text) |
+| `notes_stats` | Vault stats: counts, sizes, oldest/newest/largest note |
 | `tags_list` / `tags_get` / `tags_create` / `tags_update` / `tags_delete` | Full tag CRUD |
 | `tags_attach` / `tags_detach` | Link/unlink tags to notes |
 | `sync` | Force a sync with the server |
@@ -75,6 +76,8 @@ Then `/mcp` to reconnect.
 
 **Any other MCP client** — run `node dist/index.js` with `SN_EMAIL` set in the environment. Transport is stdio.
 
+**Self-hosting Standard Notes?** See [docs/self-hosted.md](./docs/self-hosted.md) for the docker-compose recipe and how to pin your TLS certificate.
+
 ## Configuration
 
 | Variable | Default | Description |
@@ -82,7 +85,7 @@ Then `/mcp` to reconnect.
 | `SN_EMAIL` | *required* | Your SN account email. Must match what you used with `npm run login`. |
 | `SN_SERVER_URL` | `https://api.standardnotes.com` | Sync server URL. Change for self-hosted instances. |
 | `KEYCHAIN_SERVICE` | `mcp-standardnotes` | Override the keychain service name (useful for multiple accounts). |
-| `SN_CERT_FINGERPRINT` | *unset* | *(roadmap)* SHA-256 TLS cert pinning for self-hosted servers. |
+| `SN_CERT_FINGERPRINT` | *unset* | SHA-256 TLS cert pin for self-hosted servers (64 hex chars, colons optional). See [docs/self-hosted.md](./docs/self-hosted.md). |
 
 ## Security at a glance
 

@@ -10,6 +10,7 @@ import {
   listInput,
   registerNoteHandlers,
   searchInput,
+  statsInput,
   updateInput,
 } from "./tools/notes.js";
 import {
@@ -55,9 +56,15 @@ export async function startServer(): Promise<void> {
 
   server.tool(
     "notes_list",
-    "List notes (decrypted locally). Returns uuid/title/updatedAt/preview.",
+    "List notes (decrypted locally). Returns uuid/title/updatedAt/preview. Optional `tag` filters by tag UUID or title.",
     listInput.shape,
     wrap(h.notes_list),
+  );
+  server.tool(
+    "notes_stats",
+    "Vault statistics: counts (total/active/trashed), tags, byNoteType, sizes, oldest/newest/largest note.",
+    statsInput.shape,
+    wrap(h.notes_stats),
   );
   server.tool(
     "notes_search",

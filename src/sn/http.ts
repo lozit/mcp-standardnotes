@@ -1,10 +1,45 @@
 import { createHash, randomBytes } from "node:crypto";
+import { Agent, type Dispatcher } from "undici";
 import { logger } from "../security/logger.js";
 import type { KeyParams004 } from "./protocol004.js";
 
 export interface HttpConfig {
   serverUrl: string;
   authToken?: string;
+}
+
+let pinnedDispatcher: Dispatcher | undefined;
+let pinnedDispatcherInitialized = false;
+
+function getPinnedDispatcher(): Dispatcher | undefined {
+  if (pinnedDispatcherInitialized) return pinnedDispatcher;
+  pinnedDispatcherInitialized = true;
+  const expected = process.env.SN_CERT_FINGERPRINT;
+  if (!expected) return undefined;
+  const expectedNorm = expected.replace(/:/g, "").toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(expectedNorm)) {
+    throw new Error(
+      "SN_CERT_FINGERPRINT must be a SHA-256 fingerprint (64 hex chars, colons optional)",
+    );
+  }
+  pinnedDispatcher = new Agent({
+    connect: {
+      checkServerIdentity: (_host, cert) => {
+        const got = (cert.fingerprint256 ?? "")
+          .replace(/:/g, "")
+          .toLowerCase();
+        if (got !== expectedNorm) {
+          return new Error(
+            `TLS cert pinning mismatch: server presented fingerprint ` +
+              `${got || "<missing>"} but SN_CERT_FINGERPRINT expects ${expectedNorm}`,
+          );
+        }
+        return undefined;
+      },
+    },
+  });
+  logger.info("TLS cert pinning enabled via SN_CERT_FINGERPRINT");
+  return pinnedDispatcher;
 }
 
 export interface LoginParamsResponse {
@@ -75,7 +110,11 @@ interface SnEnvelope<T> {
 }
 
 async function snFetch<T>(url: string, init: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
+  const dispatcher = getPinnedDispatcher();
+  const finalInit = dispatcher
+    ? ({ ...init, dispatcher } as RequestInit & { dispatcher: Dispatcher })
+    : init;
+  const res = await fetch(url, finalInit);
   const text = await res.text();
   let body: SnEnvelope<T>;
   try {

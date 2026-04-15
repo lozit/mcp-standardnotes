@@ -10,6 +10,16 @@ function fakeClient(): SnClient {
     createNote: vi.fn(async () => "11111111-1111-4111-8111-111111111111"),
     updateNote: vi.fn(async () => undefined),
     deleteNote: vi.fn(async () => undefined),
+    stats: vi.fn(async () => ({
+      notes: { total: 0, active: 0, trashed: 0 },
+      tags: 0,
+      byNoteType: {},
+      totalTextBytes: 0,
+      averageTextBytes: 0,
+      largest: null,
+      oldest: null,
+      newest: null,
+    })),
     listTags: vi.fn(async () => []),
     getTag: vi.fn(async () => null),
     createTag: vi.fn(async () => "22222222-2222-4222-8222-222222222222"),
@@ -88,6 +98,23 @@ describe("tool input validation", () => {
     await expect(
       h.notes_create({ title: "t", text: "body", tags: ["nope"] }),
     ).rejects.toThrow();
+  });
+
+  it("notes_list forwards tag filter", async () => {
+    const c = fakeClient();
+    const h = registerNoteHandlers(c);
+    await h.notes_list({ tag: "Recettes" });
+    expect(c.listNotes).toHaveBeenCalledWith(
+      expect.objectContaining({ tag: "Recettes" }),
+    );
+  });
+
+  it("notes_stats calls client.stats", async () => {
+    const c = fakeClient();
+    const h = registerNoteHandlers(c);
+    const res = await h.notes_stats({});
+    expect(c.stats).toHaveBeenCalled();
+    expect(res).toMatchObject({ notes: { total: 0 } });
   });
 
   it("notes_update accepts tags-only change", async () => {

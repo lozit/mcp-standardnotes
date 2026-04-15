@@ -12,7 +12,15 @@ export const listInput = z.object({
   limit: z.number().int().min(1).max(200).default(50),
   offset: z.number().int().min(0).default(0),
   includeTrashed: z.boolean().default(false),
+  tag: z
+    .string()
+    .min(1)
+    .max(256)
+    .optional()
+    .describe("Filter by tag UUID or title (case-insensitive)"),
 });
+
+export const statsInput = z.object({});
 
 export const searchInput = z.object({
   query: z.string().min(1).max(500),
@@ -92,6 +100,10 @@ export function registerNoteHandlers(client: SnClient) {
       await client.deleteNote(uuid, permanent);
       await client.sync();
       return { ok: true, permanent };
+    },
+    notes_stats: async (raw: unknown) => {
+      statsInput.parse(raw ?? {});
+      return client.stats();
     },
   };
 }

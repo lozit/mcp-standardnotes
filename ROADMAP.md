@@ -6,7 +6,7 @@ Tracking what's left to implement. Items are ordered roughly by priority, not by
 
 - [x] **Tags** — full CRUD (`tags_list`, `tags_get`, `tags_create`, `tags_update`, `tags_delete`, `tags_attach`, `tags_detach`), plus `tags` param on `notes_create`/`notes_update`.
 - [x] **Force-sync tool** — `sync` exposed; returns note/tag counts.
-- [ ] **Tag-filtered list** — `notes_list` option to filter by tag uuid/name.
+- [x] **Tag-filtered list** — `notes_list` accepts an optional `tag` (UUID or title, case-insensitive).
 - [ ] **Pagination cursors for large accounts** — current `notes_list` walks the full decrypted cache in memory. Fine for <10k notes, not great beyond.
 
 ## Auth / session
@@ -20,7 +20,7 @@ Tracking what's left to implement. Items are ordered roughly by priority, not by
 
 - [ ] **Signing for shared vaults.** Payloads in shared vaults require an Ed25519 `signingData` in the 5th payload field. Personal notes don't need it (`doesPayloadRequireSigning` checks `shared_vault_uuid`). Skipping this means shared-vault items won't be writable from the MCP.
 - [ ] **Items-key rotation.** Currently picks the first `SN|ItemsKey` as default. If the user has multiple (e.g. after a key rotation), we should use the most recent. Not strictly a bug — any items_key can decrypt any item that was wrapped under it — but cosmetically wrong and would affect app compatibility if we ever write items_keys ourselves.
-- [ ] **TLS certificate pinning** for self-hosted servers via `SN_CERT_FINGERPRINT` env var. Stub documented in README; not implemented.
+- [x] **TLS certificate pinning** via `SN_CERT_FINGERPRINT`. Wired through an `undici` Agent with `checkServerIdentity` comparing the SHA-256 fingerprint of the leaf cert.
 
 ## Write path hardening
 
@@ -43,7 +43,7 @@ Tracking what's left to implement. Items are ordered roughly by priority, not by
 
 ## Documentation
 
-- [ ] **Self-hosted server walkthrough.** Docker-compose recipe + how to point `SN_SERVER_URL` at it + a step-by-step first-run.
+- [x] **Self-hosted server walkthrough.** See [`docs/self-hosted.md`](./docs/self-hosted.md).
 - [ ] **Security whitepaper annex** explaining exactly what's reimplemented locally (framing only) vs. what comes from libsodium (all crypto primitives). Useful for auditors and skeptical users.
 
 ## Nice-to-have
@@ -51,7 +51,7 @@ Tracking what's left to implement. Items are ordered roughly by priority, not by
 - [ ] Batch create (array of notes in a single sync push).
 - [ ] Incremental sync between invocations (persist `sync_token` in the keychain blob so restarts don't refetch everything).
 - [ ] Optional `SN_SESSION_FILE` override for testing (plaintext JSON session file, never the default — must be explicitly opt-in).
-- [ ] `notes_stats` tool (count, total size, last-modified) for when the LLM wants to reason about account shape without paging everything.
+- [x] `notes_stats` tool — counts (total/active/trashed), tags, byNoteType, total/avg text bytes, oldest/newest/largest note.
 
 ## Explicitly out of scope
 
