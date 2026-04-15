@@ -7,7 +7,7 @@ Tracking what's left to implement. Items are ordered roughly by priority, not by
 - [x] **Tags** — full CRUD (`tags_list`, `tags_get`, `tags_create`, `tags_update`, `tags_delete`, `tags_attach`, `tags_detach`), plus `tags` param on `notes_create`/`notes_update`.
 - [x] **Force-sync tool** — `sync` exposed; returns note/tag counts.
 - [x] **Tag-filtered list** — `notes_list` accepts an optional `tag` (UUID or title, case-insensitive).
-- [ ] **Pagination cursors for large accounts** — current `notes_list` walks the full decrypted cache in memory. Fine for <10k notes, not great beyond.
+- [ ] **Pagination cursors for large accounts** — current `notes_list` walks the full decrypted cache in memory. Fine for <10k notes; deferred until a user reports it bites.
 
 ## Auth / session
 
@@ -30,7 +30,7 @@ Tracking what's left to implement. Items are ordered roughly by priority, not by
 
 ## Quality
 
-- [ ] **Unit tests** for `src/security/redact.ts` (secret masking), zod schema edge cases, protocol-004 parse/unparse round-trips.
+- [x] **Unit tests** for `src/security/redact.ts` (secret masking), zod schema edge cases, protocol-004 parse/unparse round-trips. 41 tests in 6 files.
 - [ ] **Integration tests** against a self-hosted Standard Notes server via `docker-compose`. Must never point at the production SN server from CI.
 - [x] **CI pipeline** (GitHub Actions): `typecheck`, `lint`, `test`, `audit` on push/PR.
 - [x] **Lint cleanup** — `diag.ts` removed (no longer needed).
@@ -44,7 +44,7 @@ Tracking what's left to implement. Items are ordered roughly by priority, not by
 ## Documentation
 
 - [x] **Self-hosted server walkthrough.** See [`docs/self-hosted.md`](./docs/self-hosted.md).
-- [ ] **Security whitepaper annex** explaining exactly what's reimplemented locally (framing only) vs. what comes from libsodium (all crypto primitives). Useful for auditors and skeptical users.
+- [x] **Security whitepaper annex** — see [`docs/protocol-004.md`](./docs/protocol-004.md), which spells out the threat model, what's reimplemented locally (framing only), and what comes from `libsodium-wrappers-sumo` (every primitive).
 
 ## Nice-to-have
 

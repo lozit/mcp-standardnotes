@@ -40,15 +40,22 @@ Ask Claude to summarize your notes, draft new ones, organize tags, search across
 ### 1. Install
 
 ```bash
+npm install -g mcp-standardnotes
+```
+
+Or run from a clone if you prefer:
+
+```bash
 git clone https://github.com/lozit/mcp-standardnotes.git
 cd mcp-standardnotes
-npm install
-npm run build
+npm install && npm run build
 ```
 
 ### 2. Log in once
 
 ```bash
+mcp-standardnotes-login         # if installed globally
+# or, from a clone:
 npm run login
 ```
 
@@ -63,13 +70,14 @@ You'll be prompted for email and password. The password derives your master key 
   "mcpServers": {
     "mcp-standardnotes": {
       "type": "stdio",
-      "command": "node",
-      "args": ["/absolute/path/to/mcp-standardnotes/dist/index.js"],
+      "command": "mcp-standardnotes",
       "env": { "SN_EMAIL": "you@example.com" }
     }
   }
 }
 ```
+
+If you cloned instead of `npm install -g`, replace `command` with the absolute path to `node` and add `args: ["/absolute/path/to/mcp-standardnotes/dist/index.js"]`.
 
 Then `/mcp` to reconnect.
 
@@ -107,6 +115,8 @@ Common issues and fixes: [docs/troubleshooting.md](./docs/troubleshooting.md).
 ## Logout
 
 ```bash
+SN_EMAIL=you@example.com mcp-standardnotes-logout
+# or, from a clone:
 SN_EMAIL=you@example.com npm run logout
 ```
 

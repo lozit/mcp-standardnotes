@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import readline from "node:readline";
 import { logger } from "../security/logger.js";
 import { createClientFromLogin } from "../sn/client.js";

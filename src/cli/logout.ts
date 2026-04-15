@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { deleteSession } from "../sn/session.js";
 
 async function main(): Promise<void> {
