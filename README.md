@@ -17,8 +17,16 @@ MCP (Model Context Protocol) server that lets Claude read and write your [Standa
 | `notes_create` | Create a new note (markdown by default; supports `plain-text`, `markdown`, `super`, `code`, `rich-text`, `task`, `spreadsheet`, `authentication`). |
 | `notes_update` | Update title / text / noteType of an existing note. |
 | `notes_delete` | Trash a note, or purge permanently with `permanent: true`. |
+| `tags_list` | List all tags (uuid, title, note count). |
+| `tags_get` | Fetch a single tag and its linked note UUIDs. |
+| `tags_create` | Create a new tag. |
+| `tags_update` | Rename an existing tag. |
+| `tags_delete` | Delete a tag permanently (tags have no trash state). |
+| `tags_attach` | Attach an existing tag to a note. |
+| `tags_detach` | Remove a tag from a note. |
+| `sync` | Force a full sync with the server. Returns decrypted note/tag counts. |
 
-Additional tools on the roadmap (tags, manual sync) are tracked in [ROADMAP.md](./ROADMAP.md).
+`notes_create` and `notes_update` also accept an optional `tags: string[]` (tag UUIDs) to link tags at write time. Roadmap items tracked in [ROADMAP.md](./ROADMAP.md).
 
 ## Requirements
 
@@ -144,7 +152,6 @@ npm run audit       # npm audit, fails on HIGH/CRITICAL
 Additional CLIs under `src/cli/`:
 
 - `npm run login` — interactive login, stores session.
-- `npm run diag` — low-level protocol 004 sanity checks (key derivation, items_key decryption). Prompts for password; does not persist anything.
 - `npm run dump-note -- <uuid-or-title>` — decrypt and print a note's raw content JSON + server item fields (for debugging payload compatibility with the official SN app).
 
 ### Project layout
@@ -155,7 +162,6 @@ src/
   server.ts             # McpServer + tool registration
   cli/
     login.ts            # `npm run login`
-    diag.ts             # low-level protocol diagnostics
     dump-note.ts        # decrypt-and-print for debugging
   sn/
     client.ts           # Orchestration: login/session → HTTP + protocol
@@ -163,9 +169,10 @@ src/
     protocol004.ts      # Framing: root key derivation, items_key decryption, note enc/dec
     http.ts             # fetch wrapper for /v2/login-params, /v2/login, /v1/items
     session.ts          # keychain persistence via keytar
-    types.ts            # Note / NoteSummary / NoteType
+    types.ts            # Note / NoteSummary / NoteType / Tag / TagSummary
   tools/
-    notes.ts            # MCP handlers + zod schemas
+    notes.ts            # Notes MCP handlers + zod schemas
+    tags.ts             # Tags + sync MCP handlers + zod schemas
   security/
     redact.ts           # Redact secrets from any object before logging
     logger.ts           # stderr-only logger using redact

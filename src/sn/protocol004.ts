@@ -350,6 +350,111 @@ export async function encryptNote(
   };
 }
 
+export interface TagReference {
+  uuid: string;
+  content_type: string;
+}
+
+export interface DecryptedTag {
+  uuid: string;
+  title: string;
+  references: TagReference[];
+  createdAt: string;
+  updatedAt: string;
+  updated_at_timestamp: number;
+  created_at_timestamp: number;
+}
+
+export async function decryptTag(
+  item: EncryptedItemInput,
+  itemsKeyByUuid: Map<string, Uint8Array>,
+): Promise<DecryptedTag> {
+  const keyId = item.items_key_id;
+  if (!keyId) {
+    throw new Error(`Tag ${item.uuid} has no items_key_id`);
+  }
+  const itemsKey = itemsKeyByUuid.get(keyId);
+  if (!itemsKey) {
+    throw new Error(`Unknown items_key ${keyId} for tag ${item.uuid}`);
+  }
+  const itemKeyHex = await decryptString(
+    item.enc_item_key,
+    itemsKey,
+    item.uuid,
+  );
+  const perItemKey = await fromHex(itemKeyHex);
+  const contentJson = await decryptString(
+    item.content,
+    perItemKey,
+    item.uuid,
+  );
+  const content = JSON.parse(contentJson) as {
+    title?: string;
+    references?: Array<{ uuid?: string; content_type?: string }>;
+  };
+  const references: TagReference[] = Array.isArray(content.references)
+    ? content.references
+        .filter(
+          (r): r is { uuid: string; content_type: string } =>
+            typeof r?.uuid === "string" && typeof r?.content_type === "string",
+        )
+        .map((r) => ({ uuid: r.uuid, content_type: r.content_type }))
+    : [];
+  return {
+    uuid: item.uuid,
+    title: content.title ?? "",
+    references,
+    createdAt: item.created_at ?? "",
+    updatedAt: item.updated_at ?? "",
+    created_at_timestamp: item.created_at_timestamp ?? 0,
+    updated_at_timestamp: item.updated_at_timestamp ?? 0,
+  };
+}
+
+export interface EncryptedTagPayload {
+  content: string;
+  enc_item_key: string;
+  items_key_id: string;
+}
+
+export async function encryptTag(
+  tag: {
+    uuid: string;
+    title: string;
+    references: TagReference[];
+  },
+  itemsKey: { uuid: string; itemsKey: Uint8Array },
+): Promise<EncryptedTagPayload> {
+  const perItemKey = await generateItemsKeyRaw();
+  // Same AAD rule as notes: {u, v} only. `kp` would cause the official app
+  // to drop the item silently (see project memory "SN 004 AAD rule").
+  const aad = { u: tag.uuid, v: "004" };
+
+  const contentObj: Record<string, unknown> = {
+    title: tag.title,
+    references: tag.references,
+    appData: {
+      [SN_APP_DOMAIN]: {
+        client_updated_at: new Date().toISOString(),
+      },
+    },
+  };
+  const contentJson = JSON.stringify(contentObj);
+
+  const content = await encryptString(contentJson, perItemKey, aad);
+  const enc_item_key = await encryptString(
+    await toHex(perItemKey),
+    itemsKey.itemsKey,
+    aad,
+  );
+
+  return {
+    content,
+    enc_item_key,
+    items_key_id: itemsKey.uuid,
+  };
+}
+
 export function normalizeSuperText(text: string): string {
   try {
     const parsed: unknown = JSON.parse(text);

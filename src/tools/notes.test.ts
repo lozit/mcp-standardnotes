@@ -10,7 +10,18 @@ function fakeClient(): SnClient {
     createNote: vi.fn(async () => "11111111-1111-4111-8111-111111111111"),
     updateNote: vi.fn(async () => undefined),
     deleteNote: vi.fn(async () => undefined),
-    sync: vi.fn(async () => undefined),
+    listTags: vi.fn(async () => []),
+    getTag: vi.fn(async () => null),
+    createTag: vi.fn(async () => "22222222-2222-4222-8222-222222222222"),
+    updateTag: vi.fn(async () => undefined),
+    deleteTag: vi.fn(async () => undefined),
+    attachTag: vi.fn(async () => undefined),
+    detachTag: vi.fn(async () => undefined),
+    sync: vi.fn(async () => ({
+      notes: 0,
+      tags: 0,
+      syncedAt: "2026-04-15T00:00:00Z",
+    })),
   };
 }
 
@@ -58,5 +69,34 @@ describe("tool input validation", () => {
     const h = registerNoteHandlers(c);
     await h.notes_create({ title: "t", text: "body" });
     expect(c.sync).toHaveBeenCalled();
+  });
+
+  it("notes_create forwards tags", async () => {
+    const c = fakeClient();
+    const h = registerNoteHandlers(c);
+    const tagUuid = "22222222-2222-4222-8222-222222222222";
+    await h.notes_create({ title: "t", text: "body", tags: [tagUuid] });
+    expect(c.createNote).toHaveBeenCalledWith({
+      title: "t",
+      text: "body",
+      tags: [tagUuid],
+    });
+  });
+
+  it("notes_create rejects malformed tag uuid", async () => {
+    const h = registerNoteHandlers(fakeClient());
+    await expect(
+      h.notes_create({ title: "t", text: "body", tags: ["nope"] }),
+    ).rejects.toThrow();
+  });
+
+  it("notes_update accepts tags-only change", async () => {
+    const c = fakeClient();
+    const h = registerNoteHandlers(c);
+    await h.notes_update({
+      uuid: "11111111-1111-4111-8111-111111111111",
+      tags: [],
+    });
+    expect(c.updateNote).toHaveBeenCalled();
   });
 });

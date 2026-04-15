@@ -4,8 +4,8 @@ Tracking what's left to implement. Items are ordered roughly by priority, not by
 
 ## Protocol coverage
 
-- [ ] **Tags** — `tags_list`, `tags_create`, attach/detach tags on notes. `tags_list` is mentioned in `CLAUDE.md` but not yet registered in `src/server.ts`. Schema already exists server-side (`content_type: "Tag"`).
-- [ ] **Force-sync tool** — expose `sync` as an MCP tool so the LLM can explicitly refresh state after external changes.
+- [x] **Tags** — full CRUD (`tags_list`, `tags_get`, `tags_create`, `tags_update`, `tags_delete`, `tags_attach`, `tags_detach`), plus `tags` param on `notes_create`/`notes_update`.
+- [x] **Force-sync tool** — `sync` exposed; returns note/tag counts.
 - [ ] **Tag-filtered list** — `notes_list` option to filter by tag uuid/name.
 - [ ] **Pagination cursors for large accounts** — current `notes_list` walks the full decrypted cache in memory. Fine for <10k notes, not great beyond.
 
@@ -32,8 +32,8 @@ Tracking what's left to implement. Items are ordered roughly by priority, not by
 
 - [ ] **Unit tests** for `src/security/redact.ts` (secret masking), zod schema edge cases, protocol-004 parse/unparse round-trips.
 - [ ] **Integration tests** against a self-hosted Standard Notes server via `docker-compose`. Must never point at the production SN server from CI.
-- [ ] **CI pipeline** (GitHub Actions): `typecheck`, `lint`, `test`, `audit`. Fail build on `npm audit` HIGH/CRITICAL per the security rules.
-- [ ] **Lint cleanup** — `diag.ts` has a lot of experimental crypto probing that can now be removed since protocol 004 is understood.
+- [x] **CI pipeline** (GitHub Actions): `typecheck`, `lint`, `test`, `audit` on push/PR.
+- [x] **Lint cleanup** — `diag.ts` removed (no longer needed).
 
 ## Documentation
 

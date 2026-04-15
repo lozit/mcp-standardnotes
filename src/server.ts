@@ -12,6 +12,17 @@ import {
   searchInput,
   updateInput,
 } from "./tools/notes.js";
+import {
+  registerTagHandlers,
+  syncInput,
+  tagsAttachInput,
+  tagsCreateInput,
+  tagsDeleteInput,
+  tagsDetachInput,
+  tagsGetInput,
+  tagsListInput,
+  tagsUpdateInput,
+} from "./tools/tags.js";
 
 function requiredEnv(name: string): string {
   const v = process.env[name];
@@ -26,6 +37,7 @@ export async function startServer(): Promise<void> {
 
   const client = await createClientFromSession({ serverUrl, email });
   const h = registerNoteHandlers(client);
+  const t = registerTagHandlers(client);
 
   const server = new McpServer({
     name: "mcp-standardnotes",
@@ -76,6 +88,54 @@ export async function startServer(): Promise<void> {
     "Trash a note (permanent=true purges irreversibly).",
     deleteInput.shape,
     wrap(h.notes_delete),
+  );
+  server.tool(
+    "tags_list",
+    "List all tags (uuid, title, updatedAt, noteCount).",
+    tagsListInput.shape,
+    wrap(t.tags_list),
+  );
+  server.tool(
+    "tags_get",
+    "Fetch a single tag (title + linked note UUIDs) by UUID.",
+    tagsGetInput.shape,
+    wrap(t.tags_get),
+  );
+  server.tool(
+    "tags_create",
+    "Create a new tag.",
+    tagsCreateInput.shape,
+    wrap(t.tags_create),
+  );
+  server.tool(
+    "tags_update",
+    "Rename an existing tag.",
+    tagsUpdateInput.shape,
+    wrap(t.tags_update),
+  );
+  server.tool(
+    "tags_delete",
+    "Delete a tag (permanent — tags have no trash state).",
+    tagsDeleteInput.shape,
+    wrap(t.tags_delete),
+  );
+  server.tool(
+    "tags_attach",
+    "Attach an existing tag to a note.",
+    tagsAttachInput.shape,
+    wrap(t.tags_attach),
+  );
+  server.tool(
+    "tags_detach",
+    "Remove a tag from a note.",
+    tagsDetachInput.shape,
+    wrap(t.tags_detach),
+  );
+  server.tool(
+    "sync",
+    "Force a full sync with the server. Returns decrypted note/tag counts.",
+    syncInput.shape,
+    wrap(t.sync),
   );
 
   // Silence zod unused warning on strict builds

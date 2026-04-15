@@ -31,3 +31,18 @@ export interface Note {
   tags: string[];
   noteType: NoteType;
 }
+
+export interface TagSummary {
+  uuid: string;
+  title: string;
+  updatedAt: string;
+  noteCount: number;
+}
+
+export interface Tag {
+  uuid: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  noteUuids: string[];
+}

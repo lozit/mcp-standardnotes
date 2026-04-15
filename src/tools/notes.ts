@@ -21,6 +21,8 @@ export const searchInput = z.object({
 
 export const getInput = z.object({ uuid: uuidSchema });
 
+const tagsArraySchema = z.array(uuidSchema).max(64);
+
 export const createInput = z.object({
   title: z.string().max(500),
   text: z
@@ -30,6 +32,7 @@ export const createInput = z.object({
       message: "text exceeds 10MB",
     }),
   noteType: noteTypeSchema.optional(),
+  tags: tagsArraySchema.optional(),
 });
 
 export const updateInput = z
@@ -38,14 +41,16 @@ export const updateInput = z
     title: z.string().max(500).optional(),
     text: z.string().max(MAX_TEXT_BYTES).optional(),
     noteType: noteTypeSchema.optional(),
+    tags: tagsArraySchema.optional(),
   })
   .refine(
     (v) =>
       v.title !== undefined ||
       v.text !== undefined ||
-      v.noteType !== undefined,
+      v.noteType !== undefined ||
+      v.tags !== undefined,
     {
-      message: "provide at least one of title, text, or noteType",
+      message: "provide at least one of title, text, noteType, or tags",
     },
   );
 
