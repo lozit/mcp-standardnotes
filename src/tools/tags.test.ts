@@ -8,6 +8,7 @@ function fakeClient(): SnClient {
     searchNotes: vi.fn(async () => []),
     getNote: vi.fn(async () => null),
     createNote: vi.fn(async () => "11111111-1111-4111-8111-111111111111"),
+    createNotesBatch: vi.fn(async () => []),
     updateNote: vi.fn(async () => undefined),
     deleteNote: vi.fn(async () => undefined),
     listTags: vi.fn(async () => []),

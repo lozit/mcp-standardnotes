@@ -21,6 +21,7 @@ Ask Claude to summarize your notes, draft new ones, organize tags, search across
 |------|---|
 | `notes_list` / `notes_search` / `notes_get` | Browse and search your notes (filter by tag with `tag: "<uuid-or-title>"`) |
 | `notes_create` / `notes_update` / `notes_delete` | Write notes (markdown, super, code, rich-text, task, spreadsheet, plain-text) |
+| `notes_create_many` | Batch-create up to 50 notes in one sync push |
 | `notes_stats` | Vault stats: counts, sizes, oldest/newest/largest note |
 | `tags_list` / `tags_get` / `tags_create` / `tags_update` / `tags_delete` | Full tag CRUD |
 | `tags_attach` / `tags_detach` | Link/unlink tags to notes |

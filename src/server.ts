@@ -5,6 +5,7 @@ import { logger } from "./security/logger.js";
 import { createClientFromSession } from "./sn/client.js";
 import {
   createInput,
+  createManyInput,
   deleteInput,
   getInput,
   listInput,
@@ -83,6 +84,12 @@ export async function startServer(): Promise<void> {
     "Create a new note.",
     createInput.shape,
     wrap(h.notes_create),
+  );
+  server.tool(
+    "notes_create_many",
+    "Create up to 50 notes in a single sync push. Returns the list of created uuid+title.",
+    createManyInput.shape,
+    wrap(h.notes_create_many),
   );
   server.tool(
     "notes_update",

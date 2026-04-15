@@ -43,6 +43,14 @@ export interface SnClient {
     noteType?: NoteType;
     tags?: string[];
   }): Promise<string>;
+  createNotesBatch(
+    inputs: Array<{
+      title: string;
+      text: string;
+      noteType?: NoteType;
+      tags?: string[];
+    }>,
+  ): Promise<Array<{ uuid: string; title: string }>>;
   updateNote(input: {
     uuid: string;
     title?: string;
@@ -201,7 +209,7 @@ export async function createClientFromSession(
     notesCache: new Map(),
     tagsCache: new Map(),
     encryptedItemsRaw: new Map(),
-    syncToken: null,
+    syncToken: stored.syncToken ?? null,
   };
   await fullSync(state);
   return buildClient(state);
@@ -217,6 +225,7 @@ async function persistSession(state: ClientState): Promise<void> {
     },
     masterKeyHex: await toHex(state.rootKey.masterKey),
     keyParams: state.rootKey.keyParams,
+    syncToken: state.syncToken,
     savedAt: new Date().toISOString(),
   });
 }
@@ -269,7 +278,13 @@ async function fullSync(state: ClientState): Promise<void> {
   while (true) {
     const res = await callSync(state, { syncToken, cursorToken, limit: 150 });
     for (const item of res.retrieved_items) {
-      if (item.deleted) continue;
+      if (item.deleted) {
+        state.encryptedItemsRaw.delete(item.uuid);
+        state.notesCache.delete(item.uuid);
+        state.tagsCache.delete(item.uuid);
+        state.itemsKeys.delete(item.uuid);
+        continue;
+      }
       state.encryptedItemsRaw.set(item.uuid, item);
     }
     syncToken = res.sync_token;
@@ -338,6 +353,14 @@ async function fullSync(state: ClientState): Promise<void> {
     tags: state.tagsCache.size,
     itemsKeys: state.itemsKeys.size,
   });
+
+  try {
+    await persistSession(state);
+  } catch (err) {
+    logger.warn("Failed to persist sync_token to keychain", {
+      message: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 function toSummary(n: DecryptedNote): NoteSummary {
@@ -736,6 +759,93 @@ function buildClient(state: ClientState): SnClient {
         }
       }
       return uuid;
+    },
+
+    async createNotesBatch(inputs) {
+      if (inputs.length === 0) return [];
+      const nowIso = new Date().toISOString();
+      type Prepared = {
+        uuid: string;
+        title: string;
+        text: string;
+        noteType: NoteType;
+        tags: string[];
+      };
+      const prepared: Prepared[] = inputs.map((input) => {
+        const resolvedType: NoteType = input.noteType ?? "markdown";
+        const resolvedText =
+          resolvedType === "super"
+            ? normalizeSuperText(input.text)
+            : input.text;
+        return {
+          uuid: crypto.randomUUID(),
+          title: input.title,
+          text: resolvedText,
+          noteType: resolvedType,
+          tags: input.tags ?? [],
+        };
+      });
+      const items = await Promise.all(
+        prepared.map(async (p) => {
+          const encrypted = await encryptNote(
+            {
+              uuid: p.uuid,
+              title: p.title,
+              text: p.text,
+              trashed: false,
+              noteType: p.noteType,
+            },
+            {
+              uuid: defaultItemsKey().uuid,
+              itemsKey: defaultItemsKey().itemsKey,
+            },
+          );
+          return {
+            uuid: p.uuid,
+            content_type: "Note",
+            content: encrypted.content,
+            enc_item_key: encrypted.enc_item_key,
+            items_key_id: encrypted.items_key_id,
+            created_at: nowIso,
+            updated_at: nowIso,
+            created_at_timestamp: 0,
+            updated_at_timestamp: 0,
+            deleted: false,
+          };
+        }),
+      );
+      const res = await pushItems(items);
+      const savedByUuid = new Map(res.saved_items.map((i) => [i.uuid, i]));
+      const failed: string[] = [];
+      for (const p of prepared) {
+        const saved = savedByUuid.get(p.uuid);
+        if (!saved) {
+          failed.push(p.uuid);
+          continue;
+        }
+        state.notesCache.set(p.uuid, {
+          uuid: p.uuid,
+          title: p.title,
+          text: p.text,
+          trashed: false,
+          noteType: p.noteType,
+          createdAt: saved.created_at ?? nowIso,
+          updatedAt: saved.updated_at ?? nowIso,
+          created_at_timestamp: saved.created_at_timestamp ?? 0,
+          updated_at_timestamp: saved.updated_at_timestamp ?? 0,
+        });
+      }
+      if (failed.length > 0) {
+        throw new Error(
+          `Server did not save ${failed.length} note(s) in batch: ${failed.join(", ")}`,
+        );
+      }
+      for (const p of prepared) {
+        for (const tagUuid of p.tags) {
+          await attachTagInternal(p.uuid, tagUuid);
+        }
+      }
+      return prepared.map((p) => ({ uuid: p.uuid, title: p.title }));
     },
 
     async updateNote({ uuid, title, text, noteType, tags }) {

@@ -48,8 +48,8 @@ Tracking what's left to implement. Items are ordered roughly by priority, not by
 
 ## Nice-to-have
 
-- [ ] Batch create (array of notes in a single sync push).
-- [ ] Incremental sync between invocations (persist `sync_token` in the keychain blob so restarts don't refetch everything).
+- [x] Batch create — `notes_create_many` (up to 50 notes per call, single sync push).
+- [x] Incremental sync between invocations — `sync_token` persisted in the keychain blob; deleted items propagated through caches on retrieved.
 - [ ] Optional `SN_SESSION_FILE` override for testing (plaintext JSON session file, never the default — must be explicitly opt-in).
 - [x] `notes_stats` tool — counts (total/active/trashed), tags, byNoteType, total/avg text bytes, oldest/newest/largest note.
 

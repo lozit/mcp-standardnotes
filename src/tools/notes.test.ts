@@ -8,6 +8,12 @@ function fakeClient(): SnClient {
     searchNotes: vi.fn(async () => []),
     getNote: vi.fn(async () => null),
     createNote: vi.fn(async () => "11111111-1111-4111-8111-111111111111"),
+    createNotesBatch: vi.fn(async () => [
+      {
+        uuid: "11111111-1111-4111-8111-111111111111",
+        title: "t",
+      },
+    ]),
     updateNote: vi.fn(async () => undefined),
     deleteNote: vi.fn(async () => undefined),
     stats: vi.fn(async () => ({
@@ -107,6 +113,31 @@ describe("tool input validation", () => {
     expect(c.listNotes).toHaveBeenCalledWith(
       expect.objectContaining({ tag: "Recettes" }),
     );
+  });
+
+  it("notes_create_many rejects empty array", async () => {
+    const h = registerNoteHandlers(fakeClient());
+    await expect(h.notes_create_many({ notes: [] })).rejects.toThrow();
+  });
+
+  it("notes_create_many forwards inputs", async () => {
+    const c = fakeClient();
+    const h = registerNoteHandlers(c);
+    const res = await h.notes_create_many({
+      notes: [
+        { title: "a", text: "A" },
+        { title: "b", text: "B" },
+      ],
+    });
+    expect(c.createNotesBatch).toHaveBeenCalled();
+    expect(res).toEqual({
+      created: [
+        {
+          uuid: "11111111-1111-4111-8111-111111111111",
+          title: "t",
+        },
+      ],
+    });
   });
 
   it("notes_stats calls client.stats", async () => {

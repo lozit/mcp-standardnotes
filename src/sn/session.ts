@@ -12,6 +12,8 @@ export interface StoredSession {
   /** Hex-encoded 32-byte root master key. Required for local decryption on resume. */
   masterKeyHex: string;
   keyParams: unknown;
+  /** Last sync_token from the server, used to incremental-sync on restart. */
+  syncToken?: string | null;
   savedAt: string;
 }
 

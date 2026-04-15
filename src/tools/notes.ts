@@ -43,6 +43,10 @@ export const createInput = z.object({
   tags: tagsArraySchema.optional(),
 });
 
+export const createManyInput = z.object({
+  notes: z.array(createInput).min(1).max(50),
+});
+
 export const updateInput = z
   .object({
     uuid: uuidSchema,
@@ -88,6 +92,12 @@ export function registerNoteHandlers(client: SnClient) {
       const uuid = await client.createNote(args);
       await client.sync();
       return { uuid };
+    },
+    notes_create_many: async (raw: unknown) => {
+      const { notes } = createManyInput.parse(raw);
+      const created = await client.createNotesBatch(notes);
+      await client.sync();
+      return { created };
     },
     notes_update: async (raw: unknown) => {
       const args = updateInput.parse(raw);
