@@ -103,8 +103,7 @@ Common issues and fixes: [docs/troubleshooting.md](./docs/troubleshooting.md).
 ## Logout
 
 ```bash
-# macOS
-security delete-generic-password -s mcp-standardnotes -a you@example.com
+SN_EMAIL=you@example.com npm run logout
 ```
 
 ## Roadmap

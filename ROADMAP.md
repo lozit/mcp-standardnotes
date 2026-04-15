@@ -11,9 +11,9 @@ Tracking what's left to implement. Items are ordered roughly by priority, not by
 
 ## Auth / session
 
-- [ ] **Wire up session refresh.** `refreshSession()` exists in `src/sn/http.ts` but is never called. When access_token expires mid-session, the next request fails hard. Need: detect 401, refresh, retry once, update keychain.
+- [x] **Wire up session refresh.** `callSync` in `src/sn/client.ts` now detects 401, calls `refreshSession`, persists the new tokens to keychain, and retries once.
 - [ ] **Rate-limit handling** — surface 429 cleanly (don't retry in a loop).
-- [ ] **Logout command** — `npm run logout` to wipe the keychain entry cleanly (currently requires manual `security delete-generic-password`).
+- [x] **Logout command** — `npm run logout` (or `npm run logout -- <email>`) wipes the keychain entry.
 - [ ] **MFA UX in CLI** — the login flow supports MFA via the `mfaPrompt` callback, but `src/cli/login.ts` re-prompts on stdin; worth improving the error message when MFA is required but no prompt is wired.
 
 ## Crypto features
@@ -24,8 +24,8 @@ Tracking what's left to implement. Items are ordered roughly by priority, not by
 
 ## Write path hardening
 
-- [ ] **Trash branch of `deleteNote`** — already writes the trashed note back, but doesn't propagate the server's returned timestamps into `state.notesCache`. Minor cosmetic issue (trashed note's `updatedAt` in local cache is slightly off until next full sync).
-- [ ] **Conflict resolution on `notes_update`.** Today we throw if the server returns a conflict. Better: fetch the remote version, merge, retry — or at minimum surface a structured error the LLM can react to.
+- [x] **Trash branch of `deleteNote`** — saved timestamps now propagated into `state.notesCache`.
+- [x] **Conflict resolution on `notes_update`.** On `sync_conflict`, refresh the local raw record from `server_item` and retry once. Surface a clear error if it still conflicts.
 - [ ] **Note types beyond markdown.** `noteType` enum is already defined; `super` has text normalization; the others (`code`, `rich-text`, `task`, `spreadsheet`, `authentication`) work for creation but we don't set the right `editorIdentifier` for all of them.
 
 ## Quality

@@ -189,15 +189,67 @@ export async function createClientFromSession(
   return buildClient(state);
 }
 
+async function persistSession(state: ClientState): Promise<void> {
+  await saveSession(state.email, {
+    serverUrl: state.serverUrl,
+    email: state.email,
+    sessionPayload: {
+      access_token: state.authToken,
+      refresh_token: state.refreshToken,
+    },
+    masterKeyHex: await toHex(state.rootKey.masterKey),
+    keyParams: state.rootKey.keyParams,
+    savedAt: new Date().toISOString(),
+  });
+}
+
+async function callSync(
+  state: ClientState,
+  params: Parameters<typeof http.sync>[1],
+): Promise<http.SyncResponse> {
+  try {
+    return await http.sync(
+      { serverUrl: state.serverUrl, authToken: state.authToken },
+      params,
+    );
+  } catch (err) {
+    if (
+      !(err instanceof http.SnApiError) ||
+      err.status !== 401 ||
+      !state.refreshToken
+    ) {
+      throw err;
+    }
+    logger.info("Access token rejected (401); refreshing");
+    let fresh: http.SessionTokens;
+    try {
+      fresh = await http.refreshSession(
+        { serverUrl: state.serverUrl },
+        state.authToken,
+        state.refreshToken,
+      );
+    } catch (refreshErr) {
+      throw new Error(
+        "Session refresh failed; run `npm run login` to re-authenticate. " +
+          (refreshErr instanceof Error ? refreshErr.message : String(refreshErr)),
+      );
+    }
+    state.authToken = fresh.access_token;
+    state.refreshToken = fresh.refresh_token;
+    await persistSession(state);
+    return await http.sync(
+      { serverUrl: state.serverUrl, authToken: state.authToken },
+      params,
+    );
+  }
+}
+
 async function fullSync(state: ClientState): Promise<void> {
   let cursorToken: string | undefined;
   let syncToken: string | undefined = state.syncToken ?? undefined;
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const res = await http.sync(
-      { serverUrl: state.serverUrl, authToken: state.authToken },
-      { syncToken, cursorToken, limit: 150 },
-    );
+    const res = await callSync(state, { syncToken, cursorToken, limit: 150 });
     for (const item of res.retrieved_items) {
       if (item.deleted) continue;
       state.encryptedItemsRaw.set(item.uuid, item);
@@ -336,15 +388,76 @@ function buildClient(state: ClientState): SnClient {
   };
 
   const pushItems = async (items: unknown[]): Promise<http.SyncResponse> => {
-    const res = await http.sync(
-      { serverUrl: state.serverUrl, authToken: state.authToken },
-      { syncToken: state.syncToken ?? undefined, items, limit: 150 },
-    );
+    const res = await callSync(state, {
+      syncToken: state.syncToken ?? undefined,
+      items,
+      limit: 150,
+    });
     for (const saved of res.saved_items) {
       state.encryptedItemsRaw.set(saved.uuid, saved);
     }
     state.syncToken = res.sync_token ?? state.syncToken;
     return res;
+  };
+
+  const submitNoteUpdate = async (
+    uuid: string,
+    merged: {
+      uuid: string;
+      title: string;
+      text: string;
+      trashed: boolean;
+      noteType: NoteType;
+    },
+    attempt: number,
+  ): Promise<http.RawItem> => {
+    const raw = state.encryptedItemsRaw.get(uuid);
+    if (!raw) throw new Error(`Note ${uuid} has no encrypted record`);
+    const encrypted = await encryptNote(merged, {
+      uuid: defaultItemsKey().uuid,
+      itemsKey: defaultItemsKey().itemsKey,
+    });
+    const res = await pushItems([
+      {
+        ...raw,
+        content: encrypted.content,
+        enc_item_key: encrypted.enc_item_key,
+        items_key_id: encrypted.items_key_id,
+        updated_at: new Date().toISOString(),
+        updated_at_timestamp: raw.updated_at_timestamp,
+      },
+    ]);
+    const saved = res.saved_items.find((i) => i.uuid === uuid);
+    if (saved) return saved;
+
+    const conflict = res.conflicts.find((c) => {
+      const cc = c as {
+        server_item?: { uuid?: string };
+        unsaved_item?: { uuid?: string };
+      };
+      return (
+        cc.server_item?.uuid === uuid || cc.unsaved_item?.uuid === uuid
+      );
+    });
+    if (!conflict) {
+      throw new Error(
+        `Server did not save note ${uuid} and reported no conflict`,
+      );
+    }
+    const cc = conflict as {
+      type?: string;
+      server_item?: http.RawItem;
+    };
+    if (cc.type === "sync_conflict" && cc.server_item && attempt < 1) {
+      logger.info(`sync_conflict on note ${uuid} — refreshing and retrying`);
+      state.encryptedItemsRaw.set(uuid, cc.server_item);
+      return submitNoteUpdate(uuid, merged, attempt + 1);
+    }
+    throw new Error(
+      `Conflict on note ${uuid} (type=${cc.type ?? "unknown"}, attempts=${
+        attempt + 1
+      }). Run the sync tool and retry.`,
+    );
   };
 
   const pushTag = async (
@@ -563,32 +676,7 @@ function buildClient(state: ClientState): SnClient {
           trashed: existing.trashed,
           noteType: nextType,
         };
-        const encrypted = await encryptNote(merged, {
-          uuid: defaultItemsKey().uuid,
-          itemsKey: defaultItemsKey().itemsKey,
-        });
-        const res = await pushItems([
-          {
-            ...raw,
-            content: encrypted.content,
-            enc_item_key: encrypted.enc_item_key,
-            items_key_id: encrypted.items_key_id,
-            updated_at: new Date().toISOString(),
-            updated_at_timestamp: raw.updated_at_timestamp,
-          },
-        ]);
-        const saved = res.saved_items.find((i) => i.uuid === uuid);
-        if (!saved) {
-          const conflict = res.conflicts.find(
-            (c) =>
-              (c as { unsaved_item?: { uuid?: string } }).unsaved_item?.uuid ===
-              uuid,
-          );
-          throw new Error(
-            `Server did not save note ${uuid}` +
-              (conflict ? ` (conflict: ${JSON.stringify(conflict)})` : ""),
-          );
-        }
+        const saved = await submitNoteUpdate(uuid, merged, 0);
         state.notesCache.set(uuid, {
           ...existing,
           ...merged,
@@ -638,7 +726,7 @@ function buildClient(state: ClientState): SnClient {
             itemsKey: defaultItemsKey().itemsKey,
           },
         );
-        await pushItems([
+        const res = await pushItems([
           {
             ...raw,
             content: encrypted.content,
@@ -648,7 +736,13 @@ function buildClient(state: ClientState): SnClient {
             updated_at_timestamp: raw.updated_at_timestamp,
           },
         ]);
-        state.notesCache.set(uuid, merged);
+        const saved = res.saved_items.find((i) => i.uuid === uuid);
+        state.notesCache.set(uuid, {
+          ...merged,
+          updatedAt: saved?.updated_at ?? existing.updatedAt,
+          updated_at_timestamp:
+            saved?.updated_at_timestamp ?? existing.updated_at_timestamp,
+        });
       }
     },
 

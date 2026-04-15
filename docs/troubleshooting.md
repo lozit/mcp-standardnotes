@@ -58,10 +58,9 @@ sudo dnf install libsecret-devel
 
 ### I want to switch accounts
 
-Delete the current session from the keychain, then re-login:
+Wipe the current session from the keychain, then re-login:
 
 ```bash
-# macOS
-security delete-generic-password -s mcp-standardnotes -a old@example.com
+SN_EMAIL=old@example.com npm run logout
 SN_EMAIL=new@example.com npm run login
 ```

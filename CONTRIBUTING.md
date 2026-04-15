@@ -31,6 +31,7 @@ npm run audit       # npm audit, fails on HIGH/CRITICAL
 Additional dev CLIs under `src/cli/`:
 
 - `npm run login` — interactive login, stores session in the OS keychain.
+- `npm run logout` — wipe the keychain entry (reads `SN_EMAIL` or `npm run logout -- <email>`).
 - `npm run dump-note -- <uuid-or-title>` — decrypt and print a note's raw content JSON + server item fields (useful when debugging payload compatibility with the official SN app).
 
 ## PR checklist
