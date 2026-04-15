@@ -1,32 +1,32 @@
 # MCP Standard Notes
 
-Serveur MCP (Model Context Protocol) permettant à Claude d'interagir avec un compte Standard Notes (lecture, création, édition, suppression de notes et tags) tout en respectant le chiffrement de bout en bout (E2EE) de Standard Notes.
+MCP (Model Context Protocol) server that lets Claude interact with a Standard Notes account (read, create, edit, delete notes and tags) while preserving Standard Notes' end-to-end encryption (E2EE).
 
-<important if="travail sur le chiffrement ou l'authentification">
-NE JAMAIS réimplémenter une primitive cryptographique à la main (pas d'AES, pas de ChaCha, pas de KDF custom). Les primitives viennent exclusivement de `libsodium-wrappers-sumo` (audité, Argon2id + XChaCha20-Poly1305 IETF).
+<important if="working on encryption or authentication">
+NEVER reimplement a cryptographic primitive by hand (no AES, no ChaCha, no custom KDF). Primitives come exclusively from `libsodium-wrappers-sumo` (audited, Argon2id + XChaCha20-Poly1305 IETF).
 
-Ce qui est implémenté localement = uniquement le **framing du protocole 004 Standard Notes** (format de payload `004:<nonce>:<ciphertext>:<aad>`, dérivation root key → masterKey/serverPassword, wrap/unwrap d'items_keys). C'est du parsing/sérialisation de format public documenté, pas de la cryptographie nouvelle.
+What is implemented locally = only the **Standard Notes protocol 004 framing** (payload format `004:<nonce>:<ciphertext>:<aad>`, root key derivation → masterKey/serverPassword, items_key wrap/unwrap). That's parsing/serialization of a documented public format, not new cryptography.
 
-Les paquets `@standardnotes/snjs` et modulaires `@standardnotes/{encryption,models,...}` ont été écartés : le monolithe est déprécié (Node 16 only), et les paquets modulaires ont des breaking changes non-propagés (ContentType retiré de common) qui les rendent inutilisables en externe.
+The `@standardnotes/snjs` package and the modular `@standardnotes/{encryption,models,...}` packages were ruled out: the monolith is deprecated (Node 16 only), and the modular packages have un-propagated breaking changes (ContentType removed from common) that make them unusable externally.
 </important>
 
 ## Stack
 
-- **Language** : TypeScript (strict)
-- **Runtime** : Node.js ≥ 20
-- **SDK MCP** : `@modelcontextprotocol/sdk`
-- **Crypto** : `libsodium-wrappers-sumo` (Argon2id + XChaCha20-Poly1305 IETF)
-- **HTTP** : `fetch` natif (Node 20+)
-- **Transport MCP** : stdio (local, pas d'exposition réseau)
+- **Language**: TypeScript (strict)
+- **Runtime**: Node.js ≥ 20
+- **MCP SDK**: `@modelcontextprotocol/sdk`
+- **Crypto**: `libsodium-wrappers-sumo` (Argon2id + XChaCha20-Poly1305 IETF)
+- **HTTP**: native `fetch` (Node 20+)
+- **MCP transport**: stdio (local, no network exposure)
 
-## Commandes
+## Commands
 
 ```bash
-npm install            # Installer les dépendances
-npm run build          # Compiler TypeScript → dist/
-npm run dev            # Lancer en watch mode (tsx)
-npm run typecheck      # Vérifier les types sans build
-npm test               # Lancer les tests (vitest)
+npm install            # Install dependencies
+npm run build          # Compile TypeScript → dist/
+npm run dev            # Watch mode (tsx)
+npm run typecheck      # Type-check without emitting
+npm test               # Run tests (vitest)
 npm run lint           # ESLint
 ```
 
@@ -34,75 +34,77 @@ npm run lint           # ESLint
 
 ```
 src/
-  index.ts             # Entrée MCP stdio
-  server.ts            # McpServer + registration des tools
-  cli/login.ts         # `npm run login` — prompt interactif + keychain
+  index.ts             # MCP stdio entry point
+  server.ts            # McpServer + tool registration
+  cli/login.ts         # `npm run login` — interactive prompt + keychain
   sn/
-    client.ts          # Orchestration : login/session → HTTP + protocol
-    crypto.ts          # Wrapper libsodium (argon2id, xchacha20poly1305)
-    protocol004.ts     # Framing SN 004 : root key, items_key wrap, payload enc/dec
-    http.ts            # fetch wrapper : /v1/login-params, /v1/login, /v1/items/sync
-    session.ts         # Persistance session via keytar
-    types.ts           # Types Note/NoteSummary/KeyParams
-  tools/notes.ts       # Handlers MCP + zod schemas
+    client.ts          # Orchestration: login/session → HTTP + protocol
+    crypto.ts          # libsodium wrapper (argon2id, xchacha20poly1305)
+    protocol004.ts     # SN 004 framing: root key, items_key wrap, payload enc/dec
+    http.ts            # fetch wrapper: /v1/login-params, /v1/login, /v1/items/sync
+    session.ts         # Session persistence via keytar
+    types.ts           # Note / NoteSummary / KeyParams types
+  tools/notes.ts       # MCP handlers + zod schemas
+  tools/tags.ts        # Tags + sync handlers + zod schemas
   security/
     redact.ts, logger.ts
 .env.example
 ```
 
-## Tools MCP exposés
+## Exposed MCP tools
 
 | Tool | Description |
 |------|-------------|
-| `notes_list` | Liste les notes (titre + uuid, contenu tronqué) |
-| `notes_search` | Recherche full-text sur titre+contenu déchiffrés |
-| `notes_get` | Récupère une note par uuid |
-| `notes_create` | Crée une note (title, text, tags?) |
-| `notes_update` | Met à jour une note existante |
-| `notes_delete` | Supprime (trash par défaut, purge si `permanent=true`) |
-| `tags_list` | Liste des tags |
-| `sync` | Force une synchronisation |
+| `notes_list` | List notes (title + uuid, truncated content) |
+| `notes_search` | Full-text search on decrypted title+content |
+| `notes_get` | Fetch a note by uuid |
+| `notes_create` | Create a note (title, text, tags?) |
+| `notes_update` | Update an existing note |
+| `notes_delete` | Delete (trash by default, purge if `permanent=true`) |
+| `tags_list` / `tags_get` / `tags_create` / `tags_update` / `tags_delete` | Tag CRUD |
+| `tags_attach` / `tags_detach` | Link/unlink a tag to a note |
+| `sync` | Force a synchronization |
 
-## Exigences de sécurité (non négociables)
+## Security requirements (non-negotiable)
 
-<important if="ajout/modification d'un tool, stockage, logging, ou auth">
-1. **Mot de passe jamais loggé, jamais stocké.** Le password utilisateur n'apparaît ni en clair ni hashé dans les logs, fichiers, ou variables d'env persistantes. Il sert uniquement à dériver le root key via SNJS en mémoire.
-2. **Stockage de session** : le token/session SNJS est stocké via `keytar` (Keychain macOS / libsecret Linux / Credential Vault Windows). JAMAIS dans un fichier plain-text sous `~/.config`.
-3. **Transport stdio uniquement.** Pas de port HTTP ouvert. Si un transport réseau est demandé, refuser et expliquer le risque.
-4. **Logs** : passer tout output par `security/redact.ts` qui masque les champs `password`, `mk`, `ak`, `pw`, `itemsKey`, `authKeyParams`, JWT, et toute string ressemblant à un token (>= 32 chars base64/hex).
-5. **Validation d'entrée** : toutes les inputs des tools MCP validées par `zod`. UUID format strict, longueur max des contenus (10 MB).
-6. **Confirmation destructrice** : `notes_delete` avec `permanent=true` DOIT exiger un flag explicite côté tool arg — pas de purge silencieuse.
-7. **TLS cert pinning** pour serveurs auto-hébergés (optionnel, via env `SN_CERT_FINGERPRINT`).
-8. **Pas de télémétrie.** Aucun appel réseau sortant en dehors du endpoint SN configuré.
-9. **Dépendances** : `npm audit` doit passer sans vuln HIGH/CRITICAL avant tout merge.
+<important if="adding/modifying a tool, storage, logging, or auth">
+1. **Password is never logged, never stored.** The user password never appears in cleartext or hashed form in logs, files, or persistent env vars. It's only used in memory to derive the root key.
+2. **Session storage**: the session/tokens are stored via `keytar` (macOS Keychain / Linux libsecret / Windows Credential Vault). NEVER in a plaintext file under `~/.config`.
+3. **stdio transport only.** No HTTP port is opened. If a network transport is requested, refuse it and explain the risk.
+4. **Logs**: route all output through `security/redact.ts`, which masks fields `password`, `mk`, `ak`, `pw`, `itemsKey`, `authKeyParams`, JWTs, and any string that looks like a token (≥ 32 chars base64/hex).
+5. **Input validation**: every MCP tool input is validated by `zod`. Strict UUID format, max content length (10 MB).
+6. **Destructive confirmation**: `notes_delete` with `permanent=true` MUST require an explicit flag on the tool arg — no silent purges.
+7. **TLS cert pinning** for self-hosted servers (optional, via env `SN_CERT_FINGERPRINT`).
+8. **No telemetry.** No outbound network call outside the configured SN endpoint.
+9. **Dependencies**: `npm audit` must pass with no HIGH/CRITICAL vulnerabilities before any merge.
 </important>
 
 ## Configuration
 
-Via variables d'environnement (voir `.env.example`) :
+Via environment variables (see `.env.example`):
 
-- `SN_SERVER_URL` — URL du serveur (default: `https://api.standardnotes.com`)
-- `SN_EMAIL` — email du compte (le password est demandé au premier run puis la session est persistée chiffrée)
-- `SN_CERT_FINGERPRINT` — (optionnel) pinning SHA-256 du cert TLS
+- `SN_SERVER_URL` — server URL (default: `https://api.standardnotes.com`)
+- `SN_EMAIL` — account email (the password is prompted on first run, then the session is persisted encrypted)
+- `SN_CERT_FINGERPRINT` — (optional) SHA-256 TLS cert pinning
 
-Le premier démarrage déclenche un login interactif (prompt stdin hors MCP, via `npm run login`) qui stocke la session dans le keychain OS. Les runs suivants réutilisent la session.
+First boot triggers an interactive login (stdin prompt outside MCP, via `npm run login`) that stores the session in the OS keychain. Subsequent runs reuse the session.
 
 ## Gotchas
 
-- **SNJS est async-heavy** : toujours `await application.sync()` après un CRUD avant de considérer l'opération terminée.
-- **Conflits de sync** : SNJS peut créer des duplicatas en cas de conflit ; le tool `notes_update` doit récupérer la note fraîche avant write.
-- **Protocole 003 legacy** : refuser les comptes non migrés 004 avec un message clair — pas de contournement.
-- **Rate limiting** : le serveur SN rate-limit l'auth (5/min). Ne pas retry en boucle sur un 429.
-- **MCP stdio** : tout `console.log` casse le protocole. Utiliser `console.error` pour les logs, ou un logger qui écrit sur stderr uniquement.
+- **Sync is async-heavy**: always `await client.sync()` after a CRUD operation before considering it complete.
+- **Sync conflicts**: the server can produce conflicts; `notes_update` should fetch the fresh note before writing. Current code throws on conflict.
+- **Legacy protocol 003**: refuse accounts not migrated to 004 with a clear error — no workaround.
+- **Rate limiting**: the SN server rate-limits auth (~5/min). Don't retry in a loop on 429.
+- **MCP stdio**: any `console.log` breaks the protocol. Use `console.error` for logs, or a logger that only writes to stderr.
 
 ## Tests
 
-- Tests unitaires : redaction, validation zod, parsing des réponses SN (mocked).
-- Tests d'intégration : optionnels, contre un serveur SN self-hosted local (docker-compose). Jamais contre le serveur prod officiel en CI.
-- **Ne jamais committer** de fixtures contenant de vraies données chiffrées ou des clés.
+- Unit tests: redaction, zod validation, parsing of SN responses (mocked).
+- Integration tests: optional, against a local self-hosted SN server (docker-compose). Never against the official production server in CI.
+- **Never commit** fixtures containing real encrypted data or keys.
 
-## Références
+## References
 
-- Spec SNJS : https://github.com/standardnotes/snjs/blob/main/packages/snjs/specification.md
-- Whitepaper crypto : https://standardnotes.com/help/security/encryption
-- MCP SDK : https://github.com/modelcontextprotocol/typescript-sdk
+- SNJS spec: https://github.com/standardnotes/snjs/blob/main/packages/snjs/specification.md
+- Crypto whitepaper: https://standardnotes.com/help/security/encryption
+- MCP SDK: https://github.com/modelcontextprotocol/typescript-sdk

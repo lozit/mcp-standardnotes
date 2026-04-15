@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "MCP server for Standard Notes with E2EE (protocol 004)",
-  "license": "AGPL-3.0-or-later",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/lozit/mcp-standardnotes.git"

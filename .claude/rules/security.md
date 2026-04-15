@@ -1,12 +1,12 @@
 # Security rules
 
-<important if="tout changement touchant auth, crypto, logging, stockage, ou réseau">
-- Jamais de `console.log` sur stdout (casse MCP stdio). Utiliser stderr.
-- Jamais logger ou persister : password, rootKey, masterKey, serverPassword, itemsKey, JWT, session token.
-- Toujours passer par `security/redact.ts` avant tout log.
-- Jamais écrire de secret dans `.env` — utiliser le keychain OS via `keytar`.
-- Jamais ajouter un transport réseau au serveur MCP (stdio only).
-- Jamais désactiver la vérification TLS (`rejectUnauthorized: false` interdit).
-- Toute entrée tool MCP validée par zod avant usage.
+<important if="any change touching auth, crypto, logging, storage, or network">
+- Never `console.log` to stdout (breaks MCP stdio). Use stderr.
+- Never log or persist: password, rootKey, masterKey, serverPassword, itemsKey, JWT, session token.
+- Always route through `security/redact.ts` before any log.
+- Never write a secret to `.env` — use the OS keychain via `keytar`.
+- Never add a network transport to the MCP server (stdio only).
+- Never disable TLS verification (`rejectUnauthorized: false` is forbidden).
+- Every MCP tool input is validated by zod before use.
 - `npm audit` HIGH/CRITICAL = blocker.
 </important>

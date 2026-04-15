@@ -35,6 +35,12 @@ Tracking what's left to implement. Items are ordered roughly by priority, not by
 - [x] **CI pipeline** (GitHub Actions): `typecheck`, `lint`, `test`, `audit` on push/PR.
 - [x] **Lint cleanup** — `diag.ts` removed (no longer needed).
 
+## Open-source polish
+
+- [x] **Translate all French to English.** `CLAUDE.md` and `.claude/rules/security.md` are now in English.
+- [x] **Relicense to MIT.** Switched from AGPL-3.0-or-later to MIT for broader adoption.
+- [x] **Split "user-facing" docs from "contributor" docs.** Landing README, `CONTRIBUTING.md`, `docs/protocol-004.md`, `docs/troubleshooting.md`. `CLAUDE.md` + `.claude/` stay public.
+
 ## Documentation
 
 - [ ] **Self-hosted server walkthrough.** Docker-compose recipe + how to point `SN_SERVER_URL` at it + a step-by-step first-run.
