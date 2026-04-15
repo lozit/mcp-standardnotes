@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./banner@2x.png" alt="mcp-standardnotes" width="100%">
+</p>
+
 # mcp-standardnotes
 
 [![CI](https://github.com/lozit/mcp-standardnotes/actions/workflows/ci.yml/badge.svg)](https://github.com/lozit/mcp-standardnotes/actions/workflows/ci.yml)
@@ -7,6 +11,8 @@
 **Give Claude secure read/write access to your [Standard Notes](https://standardnotes.com/) vault — end-to-end encrypted, local stdio only, zero cloud middleman.**
 
 Ask Claude to summarize your notes, draft new ones, organize tags, search across your vault — all while your master key stays on your machine. Works with Claude Code, Claude Desktop, and any MCP-compatible client.
+
+> **Disclaimer.** This is an unofficial third-party integration. Not affiliated with, endorsed by, or sponsored by Standard Notes Ltd. "Standard Notes" is a trademark of Standard Notes Ltd.
 
 ## Why
 
