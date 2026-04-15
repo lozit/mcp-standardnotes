@@ -40,7 +40,7 @@ async function main(): Promise<void> {
     await createClientFromLogin(
       { serverUrl, email },
       password,
-      async () => prompt("2FA code: "),
+      async () => prompt("Two-factor code (6 digits): "),
     );
     password = "";
     logger.info("Login OK, session stored in keychain", { email, serverUrl });

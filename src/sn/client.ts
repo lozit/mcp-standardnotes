@@ -110,25 +110,34 @@ export async function createClientFromLogin(
       codeVerifier,
     );
   } catch (err) {
-    if (
-      err instanceof http.SnApiError &&
-      err.tag === "mfa-required" &&
-      mfaPrompt
-    ) {
-      const mfaKey =
-        (err.payload as { mfa_key?: string } | undefined)?.mfa_key ?? "";
-      if (!mfaKey) throw err;
-      const code = await mfaPrompt();
-      loginRes = await http.login(
-        { serverUrl: config.serverUrl },
-        config.email,
-        rootKey.serverPassword,
-        codeVerifier,
-        { mfaKey, code },
-      );
-    } else {
+    if (!(err instanceof http.SnApiError) || err.tag !== "mfa-required") {
       throw err;
     }
+    if (!mfaPrompt) {
+      throw new Error(
+        "Two-factor authentication is enabled on this account. " +
+          "Run `npm run login` interactively (it wires the MFA prompt).",
+      );
+    }
+    const mfaKey =
+      (err.payload as { mfa_key?: string } | undefined)?.mfa_key ?? "";
+    if (!mfaKey) {
+      throw new Error(
+        "Server requested 2FA but did not return an mfa_key field. " +
+          "This is likely a server bug or a non-standard MFA flow.",
+      );
+    }
+    const code = (await mfaPrompt()).trim();
+    if (!code) {
+      throw new Error("Empty 2FA code; aborting login.");
+    }
+    loginRes = await http.login(
+      { serverUrl: config.serverUrl },
+      config.email,
+      rootKey.serverPassword,
+      codeVerifier,
+      { mfaKey, code },
+    );
   }
 
   const state: ClientState = {
@@ -270,12 +279,17 @@ async function fullSync(state: ClientState): Promise<void> {
   state.syncToken = syncToken ?? null;
 
   // First pass: decrypt items_keys
+  let mostRecentTs = -Infinity;
   for (const item of state.encryptedItemsRaw.values()) {
     if (item.content_type !== "SN|ItemsKey") continue;
     try {
       const k = await decryptItemsKey(item, state.rootKey);
       state.itemsKeys.set(k.uuid, k);
-      if (!state.defaultItemsKeyUuid) state.defaultItemsKeyUuid = k.uuid;
+      const ts = item.updated_at_timestamp ?? 0;
+      if (ts >= mostRecentTs) {
+        mostRecentTs = ts;
+        state.defaultItemsKeyUuid = k.uuid;
+      }
     } catch (err) {
       logger.warn(`Failed to decrypt items_key ${item.uuid}`, {
         message: err instanceof Error ? err.message : String(err),

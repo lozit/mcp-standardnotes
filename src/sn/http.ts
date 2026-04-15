@@ -115,6 +115,17 @@ async function snFetch<T>(url: string, init: RequestInit): Promise<T> {
     ? ({ ...init, dispatcher } as RequestInit & { dispatcher: Dispatcher })
     : init;
   const res = await fetch(url, finalInit);
+  if (res.status === 429) {
+    const retryAfter = res.headers.get("retry-after");
+    const hint = retryAfter ? ` Retry after ${retryAfter}s.` : "";
+    throw new SnApiError(
+      `Rate limited by Standard Notes server (HTTP 429).${hint} ` +
+        `Wait before retrying — do not loop.`,
+      "rate-limited",
+      429,
+      retryAfter ? { retryAfter } : undefined,
+    );
+  }
   const text = await res.text();
   let body: SnEnvelope<T>;
   try {

@@ -35,6 +35,12 @@ import type { NoteType } from "./types.js";
 
 const SN_APP_DOMAIN = "org.standardnotes.sn";
 
+const EDITOR_IDENTIFIERS: Partial<Record<NoteType, string>> = {
+  markdown: "org.standardnotes.advanced-markdown-editor",
+  super: "com.standardnotes.super-editor",
+  code: "org.standardnotes.code-editor",
+};
+
 export interface KeyParams004 {
   version: "004";
   identifier: string;
@@ -308,14 +314,13 @@ export async function encryptNote(
   const aad = { u: note.uuid, v: "004" };
 
   const resolvedType = note.noteType ?? "plain-text";
-  const editorIdentifier =
-    resolvedType === "markdown"
-      ? "org.standardnotes.advanced-markdown-editor"
-      : resolvedType === "super"
-        ? "com.standardnotes.super-editor"
-        : resolvedType === "code"
-          ? "org.standardnotes.code-editor"
-          : undefined;
+  // Editor identifier is a hint for legacy SN clients that route by editor
+  // rather than by `noteType`. Modern SN routes by `noteType` alone, so we
+  // only set this for editors with a stable, well-known identifier. For
+  // `rich-text` / `task` / `spreadsheet` / `authentication` we omit it
+  // intentionally — `noteType` is sufficient and a wrong identifier would
+  // mask the type.
+  const editorIdentifier = EDITOR_IDENTIFIERS[resolvedType];
   const previewPlain =
     resolvedType === "plain-text" || resolvedType === "markdown"
       ? note.text.slice(0, 160)

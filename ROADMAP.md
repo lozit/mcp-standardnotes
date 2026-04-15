@@ -12,21 +12,21 @@ Tracking what's left to implement. Items are ordered roughly by priority, not by
 ## Auth / session
 
 - [x] **Wire up session refresh.** `callSync` in `src/sn/client.ts` now detects 401, calls `refreshSession`, persists the new tokens to keychain, and retries once.
-- [ ] **Rate-limit handling** — surface 429 cleanly (don't retry in a loop).
+- [x] **Rate-limit handling** — `snFetch` raises a clear `SnApiError` (tag `rate-limited`) on HTTP 429, with `retry-after` if the server sends it. No auto-retry.
 - [x] **Logout command** — `npm run logout` (or `npm run logout -- <email>`) wipes the keychain entry.
-- [ ] **MFA UX in CLI** — the login flow supports MFA via the `mfaPrompt` callback, but `src/cli/login.ts` re-prompts on stdin; worth improving the error message when MFA is required but no prompt is wired.
+- [x] **MFA UX in CLI** — clearer prompt ("Two-factor code (6 digits)"), validation of empty input, and a friendly error when MFA is required but no prompt is wired (i.e. MCP runtime, not the interactive CLI).
 
 ## Crypto features
 
 - [ ] **Signing for shared vaults.** Payloads in shared vaults require an Ed25519 `signingData` in the 5th payload field. Personal notes don't need it (`doesPayloadRequireSigning` checks `shared_vault_uuid`). Skipping this means shared-vault items won't be writable from the MCP.
-- [ ] **Items-key rotation.** Currently picks the first `SN|ItemsKey` as default. If the user has multiple (e.g. after a key rotation), we should use the most recent. Not strictly a bug — any items_key can decrypt any item that was wrapped under it — but cosmetically wrong and would affect app compatibility if we ever write items_keys ourselves.
+- [x] **Items-key rotation.** `defaultItemsKeyUuid` is now the items_key with the highest `updated_at_timestamp`.
 - [x] **TLS certificate pinning** via `SN_CERT_FINGERPRINT`. Wired through an `undici` Agent with `checkServerIdentity` comparing the SHA-256 fingerprint of the leaf cert.
 
 ## Write path hardening
 
 - [x] **Trash branch of `deleteNote`** — saved timestamps now propagated into `state.notesCache`.
 - [x] **Conflict resolution on `notes_update`.** On `sync_conflict`, refresh the local raw record from `server_item` and retry once. Surface a clear error if it still conflicts.
-- [ ] **Note types beyond markdown.** `noteType` enum is already defined; `super` has text normalization; the others (`code`, `rich-text`, `task`, `spreadsheet`, `authentication`) work for creation but we don't set the right `editorIdentifier` for all of them.
+- [x] **Note types beyond markdown.** Editor identifiers extracted to a constant; `markdown`/`super`/`code` set well-known IDs; the others intentionally omit `editorIdentifier` because modern SN routes by `noteType` alone and a wrong identifier would mask the type.
 
 ## Quality
 
