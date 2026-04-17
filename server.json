@@ -1,0 +1,44 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "name": "io.github.lozit/mcp-standardnotes",
+  "description": "End-to-end encrypted access to a Standard Notes vault (protocol 004, local stdio only).",
+  "version": "0.3.1",
+  "repository": {
+    "url": "https://github.com/lozit/mcp-standardnotes",
+    "source": "github"
+  },
+  "websiteUrl": "https://github.com/lozit/mcp-standardnotes#readme",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "mcp-standardnotes",
+      "version": "0.3.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "runtimeHint": "npx",
+      "environmentVariables": [
+        {
+          "name": "SN_EMAIL",
+          "description": "Standard Notes account email. The password is prompted once via `npx mcp-standardnotes-login` and the session is persisted in the OS keychain.",
+          "isRequired": true,
+          "isSecret": false
+        },
+        {
+          "name": "SN_SERVER_URL",
+          "description": "Standard Notes sync server URL. Defaults to the official cloud if unset.",
+          "isRequired": false,
+          "isSecret": false,
+          "default": "https://api.standardnotes.com"
+        },
+        {
+          "name": "SN_CERT_FINGERPRINT",
+          "description": "Optional SHA-256 TLS certificate fingerprint for pinning a self-hosted server.",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] — 2026-04-17
+
+### Added
+
+- `mcpName` field in `package.json` and a `server.json` at the repo root, for publication to the official MCP Registry (`registry.modelcontextprotocol.io`) under the namespace `io.github.lozit/mcp-standardnotes`.
+
 ## [0.3.0] — 2026-04-16
 
 ### Added

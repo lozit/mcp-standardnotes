@@ -1,9 +1,10 @@
 {
   "name": "mcp-standardnotes",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "MCP server giving Claude end-to-end encrypted access to a Standard Notes vault (protocol 004, local stdio only)",
   "license": "MIT",
   "author": "Guillaume Ferrari",
+  "mcpName": "io.github.lozit/mcp-standardnotes",
   "homepage": "https://github.com/lozit/mcp-standardnotes#readme",
   "bugs": {
     "url": "https://github.com/lozit/mcp-standardnotes/issues"
