@@ -18,6 +18,8 @@ export interface NoteSummary {
   updatedAt: string;
   preview: string;
   trashed: boolean;
+  protected: boolean;
+  locked: boolean;
   noteType: NoteType;
 }
 
@@ -28,6 +30,8 @@ export interface Note {
   createdAt: string;
   updatedAt: string;
   trashed: boolean;
+  protected: boolean;
+  locked: boolean;
   tags: string[];
   noteType: NoteType;
 }
@@ -57,3 +61,4 @@ export interface VaultStats {
   oldest: { uuid: string; title: string; createdAt: string } | null;
   newest: { uuid: string; title: string; updatedAt: string } | null;
 }
+
