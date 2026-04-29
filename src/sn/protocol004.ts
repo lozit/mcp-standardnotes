@@ -244,6 +244,8 @@ export interface DecryptedNote {
   createdAt: string;
   updatedAt: string;
   trashed: boolean;
+  protected: boolean;
+  locked: boolean;
   noteType: NoteType;
   updated_at_timestamp: number;
   created_at_timestamp: number;
@@ -276,6 +278,8 @@ export async function decryptNote(
     title?: string;
     text?: string;
     trashed?: boolean;
+    protected?: boolean;
+    appData?: { "org.standardnotes.sn"?: { locked?: boolean } };
     noteType?: string;
   };
   return {
@@ -283,6 +287,8 @@ export async function decryptNote(
     title: content.title ?? "",
     text: content.text ?? "",
     trashed: content.trashed === true,
+    protected: content.protected === true,
+    locked: content.appData?.["org.standardnotes.sn"]?.locked === true,
     noteType: (content.noteType as NoteType | undefined) ?? "plain-text",
     createdAt: item.created_at ?? "",
     updatedAt: item.updated_at ?? "",
@@ -507,3 +513,5 @@ export function normalizeSuperText(text: string): string {
     },
   });
 }
+
+

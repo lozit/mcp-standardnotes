@@ -75,7 +75,10 @@ export function registerNoteHandlers(client: SnClient) {
   return {
     notes_list: async (raw: unknown) => {
       const args = listInput.parse(raw);
-      return client.listNotes(args);
+      const notes = await client.listNotes(args);
+      return notes.map(n =>
+        (n.protected || n.locked) ? { ...n, title: '[Protected]', preview: '' } : n
+      );
     },
     notes_search: async (raw: unknown) => {
       const { query, limit } = searchInput.parse(raw);
@@ -83,8 +86,11 @@ export function registerNoteHandlers(client: SnClient) {
     },
     notes_get: async (raw: unknown) => {
       const { uuid } = getInput.parse(raw);
+      await client.sync();
       const note = await client.getNote(uuid);
       if (!note) throw new Error(`Note ${uuid} not found`);
+      if (note.protected || note.locked)
+        throw new Error(`Note ${uuid} is protected and cannot be accessed via MCP.`);
       return note;
     },
     notes_create: async (raw: unknown) => {
