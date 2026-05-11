@@ -2,10 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const { fetchMock } = vi.hoisted(() => ({ fetchMock: vi.fn() }));
 
-vi.mock("undici", async () => {
-  const actual = await vi.importActual<typeof import("undici")>("undici");
-  return { ...actual, fetch: fetchMock };
-});
+vi.mock("undici", () => ({
+  fetch: fetchMock,
+  Agent: class {
+    constructor(_opts?: unknown) {}
+  },
+}));
 
 import { getLoginParams } from "./http.js";
 

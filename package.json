@@ -1,6 +1,6 @@
 {
   "name": "mcp-standardnotes",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "MCP server giving Claude end-to-end encrypted access to a Standard Notes vault (protocol 004, local stdio only)",
   "license": "MIT",
   "author": "Guillaume Ferrari",
@@ -58,8 +58,11 @@
     "@modelcontextprotocol/sdk": "^1.0.0",
     "keytar": "^7.9.0",
     "libsodium-wrappers-sumo": "^0.7.13",
-    "undici": "^8.1.0",
+    "undici": "^7.25.0",
     "zod": "^3.23.0"
+  },
+  "overrides": {
+    "fast-uri": "^3.1.2"
   },
   "devDependencies": {
     "@types/libsodium-wrappers-sumo": "^0.7.8",

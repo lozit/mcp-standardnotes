@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] — 2026-05-11
+
+### Fixed
+
+- Login through the official Standard Notes API (`api.standardnotes.com`) — Cloudflare now serves a JS challenge to any HTTP/1.1 client regardless of User-Agent. The HTTP layer now negotiates HTTP/2 via `undici`'s `Agent({ allowH2: true })` and sends browser-like headers (Chrome UA, plus `Origin`/`Referer` scoped to the official host so self-hosted servers aren't affected). An `X-Client: mcp-standardnotes/<version>` header keeps the real client identifiable to Standard Notes' backend.
+- `npm run login` no longer overwrites the `Password:` prompt label with a `*`. The CLI now uses raw-mode stdin for masked input instead of the brittle `readline._writeToOutput` hook.
+- The `Login failed` error now surfaces the underlying `err.cause` chain and, on non-JSON responses, includes a redacted snippet of the response body — `fetch failed` mysteries become diagnosable instead of opaque.
+
+### Changed
+
+- Pinned `undici` to `^7.25.0` (was `^8.1.0`). `undici@8` requires Node `>=22.19` which broke the Node 20 CI matrix and would have broken Node 20 users in production. `undici@7` keeps `engines.node: >=20` honest.
+- `fetch` is now imported directly from `undici` rather than the Node global, so the project-bundled `Agent` and `fetch` stay version-aligned regardless of which `undici` version Node ships internally.
+
+### Security
+
+- Added `overrides.fast-uri: ^3.1.2` in `package.json` to patch a HIGH-severity advisory (GHSA-q3j6-qgpj-74h6, path traversal via percent-encoded dot segments) coming transitively through `@modelcontextprotocol/sdk → ajv → fast-uri`.
+
 ## [0.3.1] — 2026-04-17
 
 ### Added
