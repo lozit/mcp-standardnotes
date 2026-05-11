@@ -8,6 +8,26 @@ when a tag `v*` is pushed. Everything below is the manual prep + the trigger.
 
 ---
 
+## Prerequisites (one-time, but check before each release)
+
+- **GitHub secret `NPM_TOKEN`** must be set on the repo
+  (https://github.com/lozit/mcp-standardnotes/settings/secrets/actions).
+  Create the token at https://www.npmjs.com/settings/<user>/tokens —
+  "Granular Access Token" with `Read and write` permission, scoped to
+  `mcp-standardnotes`. **Tick "Bypass 2FA for these packages"** if 2FA is
+  enabled on the npm account, otherwise CI can't publish. Tokens expire —
+  if a previous release worked and the new one fails with `ENEEDAUTH`, the
+  token has likely expired; recreate and replace the secret.
+- **MCP Registry** uses GitHub OIDC — no secret needed.
+
+Verify quickly:
+
+```bash
+gh secret list -R lozit/mcp-standardnotes   # NPM_TOKEN must appear
+```
+
+---
+
 ## 0. Decide the version bump
 
 Semver:
@@ -109,13 +129,16 @@ and update the changelog. Squash any tag-prep cleanup into one commit.
 ## 6. Tag and push (triggers publication)
 
 ```bash
-git tag vNEW_VERSION
+git tag -a vNEW_VERSION -m "vNEW_VERSION"
 git push origin main --follow-tags
 ```
 
-`--follow-tags` pushes the commit AND any annotated tags reachable from
-the new HEAD in a single step. The tag push is what fires
-`publish-mcp.yml`.
+**Use `git tag -a` (annotated), not `git tag` alone.** `--follow-tags` only
+pushes annotated tags — a lightweight tag created with `git tag vX.Y.Z` stays
+local and the publish workflow never fires. If you forgot, push the tag
+explicitly: `git push origin vX.Y.Z`.
+
+The tag push is what fires `publish-mcp.yml`.
 
 **This step is irreversible** — once the workflow publishes to npm, you
 can only deprecate/unpublish within 72h and only under strict npm rules.
@@ -171,7 +194,7 @@ git add package.json server.json CHANGELOG.md package-lock.json
 git commit -m "chore(release): v${NEW_VERSION}"
 
 # 6: tag + push (triggers CI publish)
-git tag "v${NEW_VERSION}"
+git tag -a "v${NEW_VERSION}" -m "v${NEW_VERSION}"
 git push origin main --follow-tags
 
 # 7: watch
