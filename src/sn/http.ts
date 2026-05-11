@@ -1,29 +1,62 @@
 import { createHash, randomBytes } from "node:crypto";
-import { Agent, type Dispatcher } from "undici";
+import { createRequire } from "node:module";
+import { Agent, fetch, type Dispatcher } from "undici";
 import { logger } from "../security/logger.js";
+import { redactString } from "../security/redact.js";
 import type { KeyParams004 } from "./protocol004.js";
+
+const require = createRequire(import.meta.url);
+const { version: PKG_VERSION } = require("../../package.json") as {
+  version: string;
+};
+
+// Cloudflare in front of api.standardnotes.com serves a JS challenge to
+// requests whose headers don't look like a real browser. We can't solve the
+// challenge in Node, so we avoid triggering it: send a Chrome UA, plus the
+// Origin/Referer the SN web app would send. X-Client carries our real
+// identity for SN's backend (CF doesn't gate on it).
+const BROWSER_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
+  "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+const X_CLIENT = `mcp-standardnotes/${PKG_VERSION}`;
+const OFFICIAL_SN_HOST = "api.standardnotes.com";
+
+function isOfficialSn(url: string): boolean {
+  try {
+    return new URL(url).hostname === OFFICIAL_SN_HOST;
+  } catch {
+    return false;
+  }
+}
 
 export interface HttpConfig {
   serverUrl: string;
   authToken?: string;
 }
 
-let pinnedDispatcher: Dispatcher | undefined;
-let pinnedDispatcherInitialized = false;
+let dispatcher: Dispatcher | undefined;
+let dispatcherInitialized = false;
 
-function getPinnedDispatcher(): Dispatcher | undefined {
-  if (pinnedDispatcherInitialized) return pinnedDispatcher;
-  pinnedDispatcherInitialized = true;
+// Cloudflare in front of api.standardnotes.com flags HTTP/1.1 clients as bots
+// regardless of headers — modern browsers/curl negotiate h2. Node's fetch
+// defaults to h1.1, which fails the JS challenge. allowH2 makes undici
+// negotiate ALPN h2 with the server, falling back to h1.1 if unsupported
+// (so self-hosted servers without h2 still work).
+function getDispatcher(): Dispatcher {
+  if (dispatcherInitialized && dispatcher) return dispatcher;
+  dispatcherInitialized = true;
+
   const expected = process.env.SN_CERT_FINGERPRINT;
-  if (!expected) return undefined;
-  const expectedNorm = expected.replace(/:/g, "").toLowerCase();
-  if (!/^[0-9a-f]{64}$/.test(expectedNorm)) {
-    throw new Error(
-      "SN_CERT_FINGERPRINT must be a SHA-256 fingerprint (64 hex chars, colons optional)",
-    );
-  }
-  pinnedDispatcher = new Agent({
-    connect: {
+  const agentOpts: ConstructorParameters<typeof Agent>[0] = { allowH2: true };
+
+  if (expected) {
+    const expectedNorm = expected.replace(/:/g, "").toLowerCase();
+    if (!/^[0-9a-f]{64}$/.test(expectedNorm)) {
+      throw new Error(
+        "SN_CERT_FINGERPRINT must be a SHA-256 fingerprint (64 hex chars, colons optional)",
+      );
+    }
+    agentOpts.connect = {
       checkServerIdentity: (_host, cert) => {
         const got = (cert.fingerprint256 ?? "")
           .replace(/:/g, "")
@@ -36,10 +69,12 @@ function getPinnedDispatcher(): Dispatcher | undefined {
         }
         return undefined;
       },
-    },
-  });
-  logger.info("TLS cert pinning enabled via SN_CERT_FINGERPRINT");
-  return pinnedDispatcher;
+    };
+    logger.info("TLS cert pinning enabled via SN_CERT_FINGERPRINT");
+  }
+
+  dispatcher = new Agent(agentOpts);
+  return dispatcher;
 }
 
 export interface LoginParamsResponse {
@@ -110,11 +145,29 @@ interface SnEnvelope<T> {
 }
 
 async function snFetch<T>(url: string, init: RequestInit): Promise<T> {
-  const dispatcher = getPinnedDispatcher();
-  const finalInit = dispatcher
-    ? ({ ...init, dispatcher } as RequestInit & { dispatcher: Dispatcher })
-    : init;
-  const res = await fetch(url, finalInit);
+  const headers = new Headers(init.headers);
+  if (!headers.has("User-Agent")) headers.set("User-Agent", BROWSER_UA);
+  if (!headers.has("X-Client")) headers.set("X-Client", X_CLIENT);
+  if (!headers.has("Accept")) {
+    headers.set("Accept", "application/json, text/plain, */*");
+  }
+  if (!headers.has("Accept-Language")) {
+    headers.set("Accept-Language", "en-US,en;q=0.9");
+  }
+  if (isOfficialSn(url)) {
+    if (!headers.has("Origin")) {
+      headers.set("Origin", "https://app.standardnotes.com");
+    }
+    if (!headers.has("Referer")) {
+      headers.set("Referer", "https://app.standardnotes.com/");
+    }
+  }
+  const finalInit = {
+    ...init,
+    headers,
+    dispatcher: getDispatcher(),
+  };
+  const res = await fetch(url, finalInit as Parameters<typeof fetch>[1]);
   if (res.status === 429) {
     const retryAfter = res.headers.get("retry-after");
     const hint = retryAfter ? ` Retry after ${retryAfter}s.` : "";
@@ -131,7 +184,13 @@ async function snFetch<T>(url: string, init: RequestInit): Promise<T> {
   try {
     body = text ? (JSON.parse(text) as SnEnvelope<T>) : {};
   } catch {
-    throw new Error(`Non-JSON response from ${url} (status ${res.status})`);
+    const snippet = redactString(text.slice(0, 200))
+      .replace(/\s+/g, " ")
+      .trim();
+    throw new Error(
+      `Non-JSON response from ${url} (status ${res.status})` +
+        (snippet ? `: ${snippet}` : ""),
+    );
   }
   const data = body.data as SnEnvelope<T>["data"];
   if (!res.ok || data?.error) {
