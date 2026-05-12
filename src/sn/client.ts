@@ -209,7 +209,12 @@ export async function createClientFromSession(
     notesCache: new Map(),
     tagsCache: new Map(),
     encryptedItemsRaw: new Map(),
-    syncToken: stored.syncToken ?? null,
+    // Always start with a null syncToken on cold boot — incremental sync
+    // skips items_keys (they rarely change), and we have nothing in
+    // encryptedItemsRaw to fall back on after a fresh process. The
+    // stored syncToken remains in the persisted session for future
+    // reuse if we ever start caching the encrypted vault snapshot too.
+    syncToken: null,
   };
   await fullSync(state);
   return buildClient(state);

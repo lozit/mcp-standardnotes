@@ -2,6 +2,7 @@
 import readline from "node:readline";
 import { logger } from "../security/logger.js";
 import { createClientFromLogin } from "../sn/client.js";
+import { installDesktop, resolvePaths } from "./install.js";
 
 const CTRL_C = "";
 const DEL = "";
@@ -87,6 +88,40 @@ async function main(): Promise<void> {
     password = "";
     logger.info("Login OK, session stored in keychain", { email, serverUrl });
     process.stdout.write("Login successful. Session saved in OS keychain.\n");
+
+    if (process.platform === "darwin" || process.platform === "win32") {
+      const ans = (
+        await prompt("Wire this server into Claude Desktop now? [Y/n]: ")
+      ).toLowerCase();
+      if (ans === "" || ans === "y" || ans === "yes") {
+        try {
+          const { configPath, backup } = await installDesktop({
+            email,
+            paths: resolvePaths(),
+          });
+          process.stdout.write(
+            `Claude Desktop config updated at ${configPath}\n`,
+          );
+          if (backup) {
+            process.stdout.write(`Previous config backed up to ${backup}\n`);
+          }
+          process.stdout.write(
+            "Quit Claude Desktop fully and relaunch to pick up the change.\n",
+          );
+        } catch (err) {
+          process.stdout.write(
+            `Desktop install skipped: ${err instanceof Error ? err.message : String(err)}\n`,
+          );
+          process.stdout.write(
+            "You can retry later with `mcp-standardnotes-install`.\n",
+          );
+        }
+      } else {
+        process.stdout.write(
+          "Skipped. Run `mcp-standardnotes-install` when you're ready.\n",
+        );
+      }
+    }
   } catch (err) {
     password = "";
     const causes: string[] = [];

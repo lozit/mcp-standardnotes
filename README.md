@@ -65,11 +65,25 @@ mcp-standardnotes-login         # if installed globally
 npm run login
 ```
 
-You'll be prompted for email and password. The password derives your master key in memory (Argon2id) and is never written to disk. An encrypted session is stored in your OS keychain; subsequent runs reuse it automatically.
+You'll be prompted for email and password. The password derives your master key in memory (Argon2id) and is never written to disk. An encrypted session is stored in your OS keychain; subsequent runs reuse it automatically. At the end of `login`, you're offered to wire the server into Claude Desktop in one step — accept it, restart Desktop, done.
 
 ### 3. Hook it up to Claude
 
-**Claude Code** — add to `~/.claude.json` or `.mcp.json`:
+**Claude Desktop (macOS / Windows)** — easiest path, run:
+
+```bash
+mcp-standardnotes-install
+```
+
+This writes the right entry (absolute Node + binary paths, your email from the keychain) into `~/Library/Application Support/Claude/claude_desktop_config.json` (or `%APPDATA%/Claude/claude_desktop_config.json` on Windows), backing up any existing config first. Quit Claude Desktop fully (⌘Q) and relaunch.
+
+**Claude Code** — let the `claude` CLI do it:
+
+```bash
+mcp-standardnotes-install code   # prints the exact `claude mcp add` command
+```
+
+Or add to `~/.claude.json` / `.mcp.json` manually:
 
 ```json
 {
@@ -83,11 +97,7 @@ You'll be prompted for email and password. The password derives your master key 
 }
 ```
 
-If you cloned instead of `npm install -g`, replace `command` with the absolute path to `node` and add `args: ["/absolute/path/to/mcp-standardnotes/dist/index.js"]`.
-
 Then `/mcp` to reconnect.
-
-**Claude Desktop (macOS)** — edit `~/Library/Application Support/Claude/claude_desktop_config.json` with the same structure, and use an **absolute path** to your Node ≥ 20 binary (Claude Desktop does not inherit `nvm`). See [docs/troubleshooting.md](./docs/troubleshooting.md) if you hit `SyntaxError: Unexpected token '??='`.
 
 **Any other MCP client** — run `node dist/index.js` with `SN_EMAIL` set in the environment. Transport is stdio.
 

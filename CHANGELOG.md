@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] — 2026-05-11
+
+### Fixed
+
+- Claude Desktop (and any MCP host that resumes from a stored session) now boots correctly. Before, the persisted `sync_token` was reused on every cold boot, so the next incremental sync returned only changed items and skipped the (stable) `items_keys`, causing a `No items_key decrypted — likely wrong password or account not on protocol 004.` error even with a perfectly valid session. `createClientFromSession` now ignores the stored sync token and forces a full sync on cold boot (incremental syncs at runtime still use the live token).
+
+### Added
+
+- `mcp-standardnotes-install` CLI: writes/updates `claude_desktop_config.json` (macOS / Windows) with the correct absolute Node and binary paths, picks `SN_EMAIL` from the keychain when there's exactly one stored session, backs up any existing config before overwriting. `mcp-standardnotes-install code` prints the equivalent `claude mcp add` invocation for Claude Code. `mcp-standardnotes-login` now offers to run the Desktop install at the end of a successful login.
+
 ## [0.3.2] — 2026-05-11
 
 ### Fixed

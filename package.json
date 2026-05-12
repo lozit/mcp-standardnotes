@@ -1,6 +1,6 @@
 {
   "name": "mcp-standardnotes",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "MCP server giving Claude end-to-end encrypted access to a Standard Notes vault (protocol 004, local stdio only)",
   "license": "MIT",
   "author": "Guillaume Ferrari",
@@ -30,7 +30,8 @@
   "bin": {
     "mcp-standardnotes": "dist/index.js",
     "mcp-standardnotes-login": "dist/cli/login.js",
-    "mcp-standardnotes-logout": "dist/cli/logout.js"
+    "mcp-standardnotes-logout": "dist/cli/logout.js",
+    "mcp-standardnotes-install": "dist/cli/install.js"
   },
   "files": [
     "dist/",
