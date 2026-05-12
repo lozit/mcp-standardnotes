@@ -1,7 +1,18 @@
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// keytar is a top-level import in install.ts. Mock it so the test doesn't
+// dlopen libsecret on the Linux CI runner (which doesn't have it installed).
+vi.mock("keytar", () => ({
+  default: {
+    findCredentials: vi.fn(async () => []),
+    getPassword: vi.fn(async () => null),
+    setPassword: vi.fn(async () => undefined),
+    deletePassword: vi.fn(async () => true),
+  },
+}));
 
 import { buildEntry, installDesktop } from "./install.js";
 
