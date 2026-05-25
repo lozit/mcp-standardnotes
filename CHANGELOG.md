@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.4] — 2026-05-25
+
+### Fixed
+
+- Login against the official Standard Notes cloud (`api.standardnotes.com`) was failing for everyone with `HTTP 400 — Your client version is no longer supported. Please update Standard Notes to the latest version.` Around 2026-05 the SN api-gateway began rejecting any request that doesn't advertise a supported client version via the `X-SNJS-Version` and `X-Application-Version` headers — it gates on those headers, not the request body's `api` field. `snFetch` now sends both on every request. These version strings are hard-coded (see the comment in `src/sn/http.ts`) and will need bumping whenever the gateway raises its minimum again.
+- Auth-endpoint errors are now surfaced correctly. Standard Notes returns auth errors (`/v2/login`, `/v2/login-params`) at the JSON top level (`{"error": …}`), whereas the sync endpoint nests them under `data`. `snFetch` only inspected `data.error`, so every auth failure collapsed to an opaque `HTTP <status>` — and, worse, `mfa-required` was never detected, meaning 2FA accounts could never complete an interactive login. The parser now reads both shapes, prompts for the 2FA code when required, and appends a redacted body snippet when the server returns an otherwise message-less error.
+
 ## [0.3.3] — 2026-05-11
 
 ### Fixed
