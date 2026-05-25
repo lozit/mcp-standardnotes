@@ -21,6 +21,16 @@ const BROWSER_UA =
 const X_CLIENT = `mcp-standardnotes/${PKG_VERSION}`;
 const OFFICIAL_SN_HOST = "api.standardnotes.com";
 
+// Standard Notes' api-gateway (since ~2026-05) rejects any request missing
+// these two version headers with HTTP 400 "Your client version is no longer
+// supported. Please update Standard Notes to the latest version." The gateway
+// gates on these headers — NOT on the body `api` field. Bump them when the
+// gateway raises its floor again (symptom: login suddenly 400s with that exact
+// message). Current accepted values tracked upstream by github.com/jonhadfield/
+// gosn-v2 (common/client_headers.go), which hit the same wall.
+const SNJS_VERSION = "2.211.7";
+const APP_VERSION = "Desktop-3.201.27";
+
 function isOfficialSn(url: string): boolean {
   try {
     return new URL(url).hostname === OFFICIAL_SN_HOST;
@@ -137,17 +147,31 @@ export class SnApiError extends Error {
   }
 }
 
+interface SnError {
+  tag?: string;
+  message?: string;
+  payload?: unknown;
+}
+
 interface SnEnvelope<T> {
   meta?: unknown;
-  data?: T & {
-    error?: { tag?: string; message?: string; payload?: unknown };
-  };
+  // Auth endpoints (/v2/login, /v2/login-params) return errors at the top
+  // level; the sync/items endpoints nest them under `data`. Accept both.
+  error?: SnError;
+  data?: (T & { error?: SnError }) | undefined;
 }
 
 async function snFetch<T>(url: string, init: RequestInit): Promise<T> {
   const headers = new Headers(init.headers);
   if (!headers.has("User-Agent")) headers.set("User-Agent", BROWSER_UA);
   if (!headers.has("X-Client")) headers.set("X-Client", X_CLIENT);
+  // Required by the SN api-gateway (see SNJS_VERSION / APP_VERSION above).
+  if (!headers.has("X-SNJS-Version")) {
+    headers.set("X-SNJS-Version", SNJS_VERSION);
+  }
+  if (!headers.has("X-Application-Version")) {
+    headers.set("X-Application-Version", APP_VERSION);
+  }
   if (!headers.has("Accept")) {
     headers.set("Accept", "application/json, text/plain, */*");
   }
@@ -193,14 +217,20 @@ async function snFetch<T>(url: string, init: RequestInit): Promise<T> {
     );
   }
   const data = body.data as SnEnvelope<T>["data"];
-  if (!res.ok || data?.error) {
-    const err = data?.error;
-    throw new SnApiError(
-      err?.message ?? `HTTP ${res.status}`,
-      err?.tag,
-      res.status,
-      err?.payload,
-    );
+  // SN puts the error at the top level on auth endpoints, under `data` on sync.
+  const err = body.error ?? data?.error;
+  if (!res.ok || err) {
+    let message = err?.message ?? `HTTP ${res.status}`;
+    // No structured message (unknown shape, or an error object without one):
+    // attach a redacted snippet of the raw body so the failure is diagnosable
+    // instead of an opaque "HTTP 400".
+    if (!err?.message) {
+      const snippet = redactString(text.slice(0, 200))
+        .replace(/\s+/g, " ")
+        .trim();
+      if (snippet && snippet !== "{}") message += `: ${snippet}`;
+    }
+    throw new SnApiError(message, err?.tag, res.status, err?.payload);
   }
   return (data ?? ({} as T)) as T;
 }

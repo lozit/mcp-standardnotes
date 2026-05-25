@@ -9,7 +9,7 @@ vi.mock("undici", () => ({
   },
 }));
 
-import { getLoginParams } from "./http.js";
+import { getLoginParams, SnApiError } from "./http.js";
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(body), {
@@ -59,6 +59,20 @@ describe("snFetch (via getLoginParams)", () => {
     );
   });
 
+  it("sends the version headers the SN api-gateway gates on (else HTTP 400)", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(validLoginParams));
+
+    await getLoginParams(
+      { serverUrl: "https://api.standardnotes.com" },
+      "a@b.co",
+      "challenge",
+    );
+
+    const headers = lastRequestHeaders();
+    expect(headers.get("X-SNJS-Version")).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(headers.get("X-Application-Version")).toMatch(/^\w+-\d+\.\d+\.\d+$/);
+  });
+
   it("sends Origin/Referer when talking to the official SN host", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(validLoginParams));
 
@@ -105,6 +119,66 @@ describe("snFetch (via getLoginParams)", () => {
       ),
     ).rejects.toThrow(
       /Non-JSON response from https:\/\/example\.test\/v2\/login-params \(status 403\): .*Just a moment/,
+    );
+  });
+
+  it("surfaces a top-level error envelope (auth endpoints don't nest under data)", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        { error: { tag: "invalid-auth", message: "Invalid email or password." } },
+        { status: 400 },
+      ),
+    );
+
+    const err = await getLoginParams(
+      { serverUrl: "https://api.standardnotes.com" },
+      "a@b.co",
+      "challenge",
+    ).catch((e) => e);
+
+    expect(err).toBeInstanceOf(SnApiError);
+    expect((err as SnApiError).message).toBe("Invalid email or password.");
+    expect((err as SnApiError).tag).toBe("invalid-auth");
+    expect((err as SnApiError).status).toBe(400);
+  });
+
+  it("preserves the mfa_key payload from a top-level mfa-required error", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        {
+          error: {
+            tag: "mfa-required",
+            message: "Please enter your two-factor code.",
+            payload: { mfa_key: "mfa_1a2b3c" },
+          },
+        },
+        { status: 401 },
+      ),
+    );
+
+    const err = await getLoginParams(
+      { serverUrl: "https://api.standardnotes.com" },
+      "a@b.co",
+      "challenge",
+    ).catch((e) => e);
+
+    expect((err as SnApiError).tag).toBe("mfa-required");
+    expect((err as SnApiError).payload).toEqual({ mfa_key: "mfa_1a2b3c" });
+  });
+
+  it("attaches a redacted body snippet when a non-ok JSON response has no error message", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ unexpected: "shape" }, { status: 400 }),
+    );
+
+    const err = await getLoginParams(
+      { serverUrl: "https://api.standardnotes.com" },
+      "a@b.co",
+      "challenge",
+    ).catch((e) => e);
+
+    expect((err as SnApiError).message).toMatch(
+      /^HTTP 400: .*unexpected.*shape/,
     );
   });
 
