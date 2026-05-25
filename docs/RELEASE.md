@@ -16,8 +16,12 @@ when a tag `v*` is pushed. Everything below is the manual prep + the trigger.
   "Granular Access Token" with `Read and write` permission, scoped to
   `mcp-standardnotes`. **Tick "Bypass 2FA for these packages"** if 2FA is
   enabled on the npm account, otherwise CI can't publish. Tokens expire —
-  if a previous release worked and the new one fails with `ENEEDAUTH`, the
-  token has likely expired; recreate and replace the secret.
+  if a previous release worked and the new one fails with `ENEEDAUTH`, **or
+  with `E404` / `404 Not Found - PUT .../mcp-standardnotes`** (npm returns a
+  misleading 404 for an unauthorized write to an already-published package),
+  the token has likely expired or been revoked; recreate it, replace the
+  secret, then re-run the failed workflow with `gh run rerun <id>` — no need
+  to delete/retag, the secret is read at run time.
 - **MCP Registry** uses GitHub OIDC — no secret needed.
 
 Verify quickly:
