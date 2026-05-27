@@ -123,6 +123,7 @@ Then `/mcp` to reconnect.
 - Only the protocol 004 *framing* is implemented locally; all cryptographic primitives come from `libsodium-wrappers-sumo`.
 
 Full threat model and deep-dive: [docs/protocol-004.md](./docs/protocol-004.md).
+Security policy, vulnerability reporting, and dependency-advisory notes: [SECURITY.md](./SECURITY.md).
 
 ## Troubleshooting
 
