@@ -135,4 +135,32 @@ describe("protocol004 primitives", () => {
     expect(k.uuid).toBe(itemsKeyUuid);
     expect(await toHex(k.itemsKey)).toBe(await toHex(realItemsKey));
   });
+
+  it("raises a named error (not a bare SyntaxError) when decrypted content isn't JSON", async () => {
+    await sodiumReady();
+    const masterKey = await randomBytes(32);
+    const wrappingKey = await generateItemsKeyRaw();
+    const itemsKeyUuid = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+    const aad = { u: itemsKeyUuid, v: "004", kp: { version: "004" } };
+
+    const enc_item_key = await encryptString(
+      await toHex(wrappingKey),
+      masterKey,
+      aad,
+    );
+    // Correctly AEAD-sealed (authentic) but the plaintext is not valid JSON.
+    const content = await encryptString("definitely not json", wrappingKey, aad);
+
+    const fakeRootKey = {
+      masterKey,
+      serverPassword: "00".repeat(32),
+      keyParams: { version: "004" as const, identifier: "u", pw_nonce: "n" },
+    };
+    await expect(
+      decryptItemsKey(
+        { uuid: itemsKeyUuid, content_type: "SN|ItemsKey", content, enc_item_key },
+        fakeRootKey,
+      ),
+    ).rejects.toThrow(/items_key content for .* is not valid JSON/);
+  });
 });

@@ -139,6 +139,22 @@ export async function parseEncryptedString(
   };
 }
 
+/**
+ * `JSON.parse` for already-decrypted item content. The plaintext is
+ * AEAD-authenticated (XChaCha20-Poly1305) — only data encrypted under our own
+ * key reaches here, so it can't be attacker-forged — but a genuinely corrupt
+ * item would make `JSON.parse` throw an opaque `SyntaxError`. Wrapping it names
+ * the offending item and kind, so the per-item `catch` in `fullSync` skips it
+ * cleanly instead of surfacing a context-free parser error.
+ */
+function parseDecryptedContent<T>(json: string, kind: string, uuid: string): T {
+  try {
+    return JSON.parse(json) as T;
+  } catch {
+    throw new Error(`Decrypted ${kind} content for ${uuid} is not valid JSON`);
+  }
+}
+
 export async function decryptString(
   content: string,
   key: Uint8Array,
@@ -221,10 +237,10 @@ export async function decryptItemsKey(
   const wrappingKey = await fromHex(wrappingKeyHex);
 
   const contentJson = await decryptString(item.content, wrappingKey, item.uuid);
-  const content = JSON.parse(contentJson) as {
+  const content = parseDecryptedContent<{
     version?: string;
     itemsKey?: string;
-  };
+  }>(contentJson, "items_key", item.uuid);
   if (content.version && content.version !== "004") {
     throw new Error(`items_key has non-004 version: ${content.version}`);
   }
@@ -272,12 +288,12 @@ export async function decryptNote(
     perItemKey,
     item.uuid,
   );
-  const content = JSON.parse(contentJson) as {
+  const content = parseDecryptedContent<{
     title?: string;
     text?: string;
     trashed?: boolean;
     noteType?: string;
-  };
+  }>(contentJson, "note", item.uuid);
   return {
     uuid: item.uuid,
     title: content.title ?? "",
@@ -393,10 +409,10 @@ export async function decryptTag(
     perItemKey,
     item.uuid,
   );
-  const content = JSON.parse(contentJson) as {
+  const content = parseDecryptedContent<{
     title?: string;
     references?: Array<{ uuid?: string; content_type?: string }>;
-  };
+  }>(contentJson, "tag", item.uuid);
   const references: TagReference[] = Array.isArray(content.references)
     ? content.references
         .filter(
