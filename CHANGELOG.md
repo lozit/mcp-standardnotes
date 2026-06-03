@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.5] — 2026-06-03
+
+### Fixed
+
+- 2FA-enabled accounts can finally complete an interactive login. 0.3.4 fixed the *envelope* parsing for `mfa-required` errors but the try/catch was still around the wrong call — `http.login()`. Server-side, Standard Notes verifies MFA inside the `/v2/login-params` handler (`BaseAuthController.pkceParams` → `verifyMFA.execute`), not inside `/v2/login`, so the `mfa-required` error came back from `getLoginParams()` and propagated straight to the logger as `Login failed`. The MFA handler now wraps `getLoginParams` and, on `mfa-required`, prompts and re-calls `getLoginParams` with `{ [mfa_key]: code }` in the body — same flow the official server expects (cross-checked against `standardnotes/server` and `jonhadfield/gosn-v2`). Reported by @Adaluin in #3.
+- Decrypted-content `JSON.parse` sites are now wrapped with a named-error helper. The plaintext is AEAD-authenticated (XChaCha20-Poly1305) so a corrupt-by-attacker case is impossible — but a genuinely malformed item would have surfaced as an opaque `SyntaxError`. The helper names the item kind and uuid, so the per-item `catch` in `fullSync` can skip it cleanly.
+
+### Added
+
+- `SECURITY.md` documenting the project's security posture (libsodium-only crypto, RAM-only password, OS-keychain session storage, stdio-only transport, redacted logs, zod input validation, TLS pinning) and an explicit accounting of the moderate `npm audit` advisories that surface through `@modelcontextprotocol/sdk`'s unused HTTP/SSE transport. Linked from the README.
+
 ## [0.3.4] — 2026-05-25
 
 ### Fixed
