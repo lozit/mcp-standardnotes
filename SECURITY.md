@@ -57,12 +57,13 @@ vulnerabilities** — the project's CI treats any HIGH/CRITICAL as a merge
 blocker. A small number of **moderate** advisories may surface in third-party
 scanners; here is the full, honest accounting so the report isn't a mystery:
 
-- **`express`, `express-rate-limit`, `qs`, `ip-address` (moderate).** These are
-  pulled in transitively by `@modelcontextprotocol/sdk` for its **HTTP/SSE
-  server transport**. This project is **stdio-only** and never instantiates that
-  transport, so the affected code is never loaded and there is no exploit path
-  in normal use. They will clear once the upstream SDK drops or optionalises
-  those dependencies; the SDK is already kept at its latest release.
+- **`express`, `express-rate-limit`, `qs`, `ip-address`, `hono` (moderate).**
+  These are pulled in transitively by `@modelcontextprotocol/sdk` for its
+  **HTTP/SSE server transport**. This project is **stdio-only** and never
+  instantiates that transport, so the affected code is never loaded and there
+  is no exploit path in normal use. They will clear once the upstream SDK
+  drops or optionalises those dependencies; the SDK is already kept at its
+  latest release.
 - **`vitest`, `eslint` and other build tooling.** These are `devDependencies`.
   They are used only to build and test the project and are **not included in the
   published npm package** (only `dist/` and docs ship — see the `files` field in
