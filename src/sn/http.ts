@@ -257,6 +257,12 @@ export async function getLoginParams(
   cfg: HttpConfig,
   email: string,
   codeChallenge: string,
+  // Server-side, MFA is verified inside the /v2/login-params handler
+  // (BaseAuthController.pkceParams calls verifyMFA before returning key
+  // params), NOT inside /v2/login. So on an mfa-required failure the client
+  // must re-call THIS endpoint with `{ [mfa_key]: code }` in the body — that
+  // is what `extraBody` carries. Empty/omitted = first attempt.
+  extraBody?: Record<string, string>,
 ): Promise<LoginParamsResponse> {
   const body = await snFetch<LoginParamsResponse>(
     `${cfg.serverUrl}/v2/login-params`,
@@ -267,6 +273,7 @@ export async function getLoginParams(
         email,
         api: "20200115",
         code_challenge: codeChallenge,
+        ...extraBody,
       }),
     },
   );
@@ -284,8 +291,11 @@ export async function login(
   email: string,
   serverPassword: string,
   codeVerifier: string,
-  mfa?: { mfaKey: string; code: string },
 ): Promise<LoginResponse> {
+  // The server does NOT re-verify MFA at /v2/login (pkceSignIn skips
+  // verifyMFA — see BaseAuthController). MFA is gated upstream at
+  // /v2/login-params; once we've cleared it there, this call carries no
+  // MFA payload.
   const payload: Record<string, unknown> = {
     email,
     password: serverPassword,
@@ -293,7 +303,6 @@ export async function login(
     api: "20200115",
     ephemeral: false,
   };
-  if (mfa) payload[mfa.mfaKey] = mfa.code;
   return snFetch<LoginResponse>(`${cfg.serverUrl}/v2/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

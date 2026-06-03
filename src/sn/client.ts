@@ -96,26 +96,16 @@ export async function createClientFromLogin(
   if (!password) throw new Error("password required");
   const codeVerifier = http.generateCodeVerifier();
   const codeChallenge = http.computeCodeChallenge(codeVerifier);
-  const params = await http.getLoginParams(
-    { serverUrl: config.serverUrl },
-    config.email,
-    codeChallenge,
-  );
-  const keyParams: KeyParams004 = {
-    version: "004",
-    identifier: params.identifier,
-    pw_nonce: params.pw_nonce,
-    origination: params.origination,
-    created: params.created,
-  };
-  const rootKey = await deriveRootKey(password, keyParams);
-  let loginRes: http.LoginResponse;
+  // Standard Notes verifies MFA inside the /v2/login-params handler — when 2FA
+  // is enabled, this first call fails with `mfa-required` and we must re-call
+  // login-params with `{ [mfa_key]: code }`. The /v2/login endpoint itself does
+  // NOT recheck MFA, so the prompt belongs around this call, not around login().
+  let params: http.LoginParamsResponse;
   try {
-    loginRes = await http.login(
+    params = await http.getLoginParams(
       { serverUrl: config.serverUrl },
       config.email,
-      rootKey.serverPassword,
-      codeVerifier,
+      codeChallenge,
     );
   } catch (err) {
     if (!(err instanceof http.SnApiError) || err.tag !== "mfa-required") {
@@ -139,14 +129,27 @@ export async function createClientFromLogin(
     if (!code) {
       throw new Error("Empty 2FA code; aborting login.");
     }
-    loginRes = await http.login(
+    params = await http.getLoginParams(
       { serverUrl: config.serverUrl },
       config.email,
-      rootKey.serverPassword,
-      codeVerifier,
-      { mfaKey, code },
+      codeChallenge,
+      { [mfaKey]: code },
     );
   }
+  const keyParams: KeyParams004 = {
+    version: "004",
+    identifier: params.identifier,
+    pw_nonce: params.pw_nonce,
+    origination: params.origination,
+    created: params.created,
+  };
+  const rootKey = await deriveRootKey(password, keyParams);
+  const loginRes = await http.login(
+    { serverUrl: config.serverUrl },
+    config.email,
+    rootKey.serverPassword,
+    codeVerifier,
+  );
 
   const state: ClientState = {
     serverUrl: config.serverUrl,

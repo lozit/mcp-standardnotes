@@ -166,6 +166,59 @@ describe("snFetch (via getLoginParams)", () => {
     expect((err as SnApiError).payload).toEqual({ mfa_key: "mfa_1a2b3c" });
   });
 
+  it("preserves the mfa_key payload from a gateway-wrapped {meta, data:{error}} envelope", async () => {
+    // This is the actual shape api.standardnotes.com returns — the api-gateway's
+    // HttpServiceProxy.callServer wraps every downstream response into
+    // {meta, data}, so the auth-service's `{error: {...}}` body ends up nested
+    // under `data`. Adaluin's 2FA-enabled login hit this shape and the original
+    // top-level-only mock didn't cover it.
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        {
+          meta: { auth: {} },
+          data: {
+            error: {
+              tag: "mfa-required",
+              message: "Please enter your two-factor authentication code.",
+              payload: { mfa_key: "mfa_4d5e6f" },
+            },
+          },
+        },
+        { status: 401 },
+      ),
+    );
+
+    const err = await getLoginParams(
+      { serverUrl: "https://api.standardnotes.com" },
+      "a@b.co",
+      "challenge",
+    ).catch((e) => e);
+
+    expect(err).toBeInstanceOf(SnApiError);
+    expect((err as SnApiError).tag).toBe("mfa-required");
+    expect((err as SnApiError).payload).toEqual({ mfa_key: "mfa_4d5e6f" });
+  });
+
+  it("forwards extraBody fields into the /v2/login-params request payload", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(validLoginParams));
+
+    await getLoginParams(
+      { serverUrl: "https://api.standardnotes.com" },
+      "a@b.co",
+      "challenge",
+      { mfa_1a2b3c: "654321" },
+    );
+
+    const init = fetchMock.mock.calls[0]?.[1] as { body?: string };
+    const payload = JSON.parse(init.body ?? "{}") as Record<string, unknown>;
+    expect(payload).toMatchObject({
+      email: "a@b.co",
+      api: "20200115",
+      code_challenge: "challenge",
+      mfa_1a2b3c: "654321",
+    });
+  });
+
   it("attaches a redacted body snippet when a non-ok JSON response has no error message", async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({ unexpected: "shape" }, { status: 400 }),
