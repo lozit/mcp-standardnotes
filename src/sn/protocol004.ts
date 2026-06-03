@@ -260,6 +260,13 @@ export interface DecryptedNote {
   createdAt: string;
   updatedAt: string;
   trashed: boolean;
+  // Top-level `protected` on the note content — SN requires re-auth in the
+  // app before showing content. We surface this so the tool layer can refuse
+  // to leak it to an LLM context.
+  protected: boolean;
+  // Edit-lock under appData["org.standardnotes.sn"].locked — read-only flag,
+  // content stays readable, only writes are forbidden.
+  locked: boolean;
   noteType: NoteType;
   updated_at_timestamp: number;
   created_at_timestamp: number;
@@ -292,13 +299,25 @@ export async function decryptNote(
     title?: string;
     text?: string;
     trashed?: boolean;
+    protected?: boolean;
+    appData?: Record<string, Record<string, unknown> | undefined>;
     noteType?: string;
   }>(contentJson, "note", item.uuid);
+  // SN stores the edit-lock under the appData domain "org.standardnotes.sn".
+  // Anything else (legacy keys, future extension points) we deliberately
+  // ignore here — the field is exposed only as a boolean to the tool layer.
+  const snAppData = content.appData?.["org.standardnotes.sn"];
+  const locked =
+    typeof snAppData === "object" &&
+    snAppData !== null &&
+    (snAppData as { locked?: unknown }).locked === true;
   return {
     uuid: item.uuid,
     title: content.title ?? "",
     text: content.text ?? "",
     trashed: content.trashed === true,
+    protected: content.protected === true,
+    locked,
     noteType: (content.noteType as NoteType | undefined) ?? "plain-text",
     createdAt: item.created_at ?? "",
     updatedAt: item.updated_at ?? "",

@@ -1,6 +1,37 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SnClient } from "../sn/client.js";
+import type { Note, NoteSummary } from "../sn/types.js";
 import { registerNoteHandlers } from "./notes.js";
+
+function summary(over: Partial<NoteSummary> = {}): NoteSummary {
+  return {
+    uuid: "11111111-1111-4111-8111-111111111111",
+    title: "t",
+    updatedAt: "2026-04-15T00:00:00Z",
+    preview: "preview text",
+    trashed: false,
+    protected: false,
+    locked: false,
+    noteType: "plain-text",
+    ...over,
+  };
+}
+
+function fullNote(over: Partial<Note> = {}): Note {
+  return {
+    uuid: "11111111-1111-4111-8111-111111111111",
+    title: "t",
+    text: "body",
+    createdAt: "2026-04-14T00:00:00Z",
+    updatedAt: "2026-04-15T00:00:00Z",
+    trashed: false,
+    protected: false,
+    locked: false,
+    tags: [],
+    noteType: "plain-text",
+    ...over,
+  };
+}
 
 function fakeClient(): SnClient {
   return {
@@ -156,5 +187,113 @@ describe("tool input validation", () => {
       tags: [],
     });
     expect(c.updateNote).toHaveBeenCalled();
+  });
+});
+
+// The user-facing protection policy. The protocol layer reports flags
+// faithfully — these tests pin the *behavior* the tool layer must enforce:
+// protected = info-disclosure protection (block reads + writes, mask in
+// listings), locked = edit-lock only (reads pass through, writes refused).
+describe("protected/locked enforcement", () => {
+  const uuid = "11111111-1111-4111-8111-111111111111";
+
+  it("notes_list masks protected notes (title + preview) and leaves locked notes intact", async () => {
+    const c = fakeClient();
+    (c.listNotes as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      summary({ uuid, title: "Secret", preview: "very sensitive", protected: true }),
+      summary({
+        uuid: "22222222-2222-4222-8222-222222222222",
+        title: "Recipe",
+        preview: "flour, eggs",
+        locked: true,
+      }),
+    ]);
+    const h = registerNoteHandlers(c);
+    const result = await h.notes_list({}) as NoteSummary[];
+    expect(result[0]).toMatchObject({
+      uuid,
+      title: "[Protected]",
+      preview: "",
+      protected: true,
+    });
+    expect(result[1]).toMatchObject({
+      title: "Recipe",
+      preview: "flour, eggs",
+      locked: true,
+    });
+  });
+
+  it("notes_search masks protected matches the same way notes_list does", async () => {
+    const c = fakeClient();
+    (c.searchNotes as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      summary({ uuid, title: "Secret", preview: "very sensitive", protected: true }),
+    ]);
+    const h = registerNoteHandlers(c);
+    const result = await h.notes_search({ query: "x" }) as NoteSummary[];
+    expect(result[0]).toMatchObject({ title: "[Protected]", preview: "" });
+  });
+
+  it("notes_get refuses to surface the body of a protected note", async () => {
+    const c = fakeClient();
+    (c.getNote as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      fullNote({ protected: true }),
+    );
+    const h = registerNoteHandlers(c);
+    await expect(h.notes_get({ uuid })).rejects.toThrow(/protected/i);
+  });
+
+  it("notes_get returns the body of a locked note (locked = read-only, not hidden)", async () => {
+    const c = fakeClient();
+    (c.getNote as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      fullNote({ locked: true, text: "recipe body" }),
+    );
+    const h = registerNoteHandlers(c);
+    const result = await h.notes_get({ uuid }) as Note;
+    expect(result.text).toBe("recipe body");
+    expect(result.locked).toBe(true);
+  });
+
+  it("notes_update refuses to write a protected note (without calling updateNote)", async () => {
+    const c = fakeClient();
+    (c.getNote as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      fullNote({ protected: true }),
+    );
+    const h = registerNoteHandlers(c);
+    await expect(
+      h.notes_update({ uuid, text: "tampered" }),
+    ).rejects.toThrow(/protected/i);
+    expect(c.updateNote).not.toHaveBeenCalled();
+  });
+
+  it("notes_update refuses to write a locked note (without calling updateNote)", async () => {
+    const c = fakeClient();
+    (c.getNote as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      fullNote({ locked: true }),
+    );
+    const h = registerNoteHandlers(c);
+    await expect(
+      h.notes_update({ uuid, text: "tampered" }),
+    ).rejects.toThrow(/edit-locked/i);
+    expect(c.updateNote).not.toHaveBeenCalled();
+  });
+
+  it("notes_delete refuses to delete a protected note (without calling deleteNote)", async () => {
+    const c = fakeClient();
+    (c.getNote as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      fullNote({ protected: true }),
+    );
+    const h = registerNoteHandlers(c);
+    await expect(h.notes_delete({ uuid })).rejects.toThrow(/protected/i);
+    expect(c.deleteNote).not.toHaveBeenCalled();
+  });
+
+  it("notes_delete refuses to delete a locked note (without calling deleteNote)", async () => {
+    const c = fakeClient();
+    (c.getNote as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      fullNote({ locked: true }),
+    );
+    const h = registerNoteHandlers(c);
+    await expect(h.notes_delete({ uuid })).rejects.toThrow(/edit-locked/i);
+    expect(c.deleteNote).not.toHaveBeenCalled();
   });
 });

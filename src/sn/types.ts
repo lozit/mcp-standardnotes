@@ -18,6 +18,13 @@ export interface NoteSummary {
   updatedAt: string;
   preview: string;
   trashed: boolean;
+  // Standard Notes' note-level "protected" flag (requires re-auth in the app
+  // to view). When true, listing tools mask `title`/`preview` and the read
+  // tools refuse to surface the content.
+  protected: boolean;
+  // Standard Notes' edit-lock (`appData["org.standardnotes.sn"].locked`).
+  // Content stays readable — the user just said "don't modify".
+  locked: boolean;
   noteType: NoteType;
 }
 
@@ -28,6 +35,8 @@ export interface Note {
   createdAt: string;
   updatedAt: string;
   trashed: boolean;
+  protected: boolean;
+  locked: boolean;
   tags: string[];
   noteType: NoteType;
 }

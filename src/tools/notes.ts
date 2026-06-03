@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { SnClient } from "../sn/client.js";
-import { NOTE_TYPES } from "../sn/types.js";
+import { NOTE_TYPES, type Note, type NoteSummary } from "../sn/types.js";
 
 const MAX_TEXT_BYTES = 10 * 1024 * 1024;
 
@@ -71,20 +71,48 @@ export const deleteInput = z.object({
   permanent: z.boolean().default(false),
 });
 
+// `protected` (SN top-level content flag) = the user has marked the note as
+// requiring re-auth to view. We surface it as a masked summary in listings and
+// refuse to read/update/delete the content via MCP — pushing the body into an
+// LLM context would defeat the protection the user explicitly asked for.
+// `locked` (SN appData edit-lock) = read-only. Content stays visible, only
+// writes are refused.
+function maskProtected<T extends NoteSummary>(n: T): T {
+  return n.protected ? { ...n, title: "[Protected]", preview: "" } : n;
+}
+
+function refuseRead(note: Note | NoteSummary, op: string): never {
+  throw new Error(
+    `Note ${note.uuid} is protected — cannot ${op} via MCP. ` +
+      `Open it in the Standard Notes app to view its contents.`,
+  );
+}
+
+function refuseWrite(note: Note | NoteSummary, op: string): never {
+  const reason = note.protected ? "protected" : "edit-locked";
+  throw new Error(
+    `Note ${note.uuid} is ${reason} — cannot ${op} via MCP. ` +
+      `Unlock it in the Standard Notes app first.`,
+  );
+}
+
 export function registerNoteHandlers(client: SnClient) {
   return {
     notes_list: async (raw: unknown) => {
       const args = listInput.parse(raw);
-      return client.listNotes(args);
+      const notes = await client.listNotes(args);
+      return notes.map(maskProtected);
     },
     notes_search: async (raw: unknown) => {
       const { query, limit } = searchInput.parse(raw);
-      return client.searchNotes(query, limit);
+      const hits = await client.searchNotes(query, limit);
+      return hits.map(maskProtected);
     },
     notes_get: async (raw: unknown) => {
       const { uuid } = getInput.parse(raw);
       const note = await client.getNote(uuid);
       if (!note) throw new Error(`Note ${uuid} not found`);
+      if (note.protected) refuseRead(note, "read");
       return note;
     },
     notes_create: async (raw: unknown) => {
@@ -101,12 +129,20 @@ export function registerNoteHandlers(client: SnClient) {
     },
     notes_update: async (raw: unknown) => {
       const args = updateInput.parse(raw);
+      const existing = await client.getNote(args.uuid);
+      if (existing && (existing.protected || existing.locked)) {
+        refuseWrite(existing, "update");
+      }
       await client.updateNote(args);
       await client.sync();
       return { ok: true };
     },
     notes_delete: async (raw: unknown) => {
       const { uuid, permanent } = deleteInput.parse(raw);
+      const existing = await client.getNote(uuid);
+      if (existing && (existing.protected || existing.locked)) {
+        refuseWrite(existing, "delete");
+      }
       await client.deleteNote(uuid, permanent);
       await client.sync();
       return { ok: true, permanent };

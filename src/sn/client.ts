@@ -378,6 +378,8 @@ function toSummary(n: DecryptedNote): NoteSummary {
     updatedAt: n.updatedAt,
     preview: n.text.slice(0, 200),
     trashed: n.trashed,
+    protected: n.protected,
+    locked: n.locked,
     noteType: n.noteType,
   };
 }
@@ -406,6 +408,8 @@ function toFullNote(
     createdAt: n.createdAt,
     updatedAt: n.updatedAt,
     trashed: n.trashed,
+    protected: n.protected,
+    locked: n.locked,
     tags: tagsForNote(n.uuid, tagsCache),
     noteType: n.noteType,
   };
@@ -755,6 +759,8 @@ function buildClient(state: ClientState): SnClient {
         title,
         text: resolvedText,
         trashed: false,
+        protected: false,
+        locked: false,
         noteType: resolvedType,
         createdAt: saved.created_at ?? nowIso,
         updatedAt: saved.updated_at ?? nowIso,
@@ -836,6 +842,8 @@ function buildClient(state: ClientState): SnClient {
           title: p.title,
           text: p.text,
           trashed: false,
+          protected: false,
+          locked: false,
           noteType: p.noteType,
           createdAt: saved.created_at ?? nowIso,
           updatedAt: saved.updated_at ?? nowIso,

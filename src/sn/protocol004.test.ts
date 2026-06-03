@@ -99,6 +99,56 @@ describe("protocol004 primitives", () => {
     expect(dec.title).toBe("My title");
     expect(dec.text).toBe("My body text");
     expect(dec.trashed).toBe(false);
+    // Notes created via this project's encryptNote path are never protected
+    // or locked — the flags default to false in the decrypted output.
+    expect(dec.protected).toBe(false);
+    expect(dec.locked).toBe(false);
+  });
+
+  it("surfaces the SN top-level `protected` and appData `locked` flags through decryptNote", async () => {
+    await sodiumReady();
+    // We don't have a protected-note creation path in this project, so we
+    // forge a payload that mimics what the SN app writes: top-level
+    // `protected: true` on the content, plus `appData["org.standardnotes.sn"].locked`.
+    // This pins the decryption contract — the tool layer relies on these
+    // flags to refuse reads/writes on user-protected notes.
+    const itemsKeyBytes = await generateItemsKeyRaw();
+    const itemsKeyUuid = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const noteUuid = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const perItemKey = await generateItemsKeyRaw();
+    const aad = { u: noteUuid, v: "004" };
+
+    const enc_item_key = await encryptString(
+      await toHex(perItemKey),
+      itemsKeyBytes,
+      aad,
+    );
+    const contentJson = JSON.stringify({
+      title: "Secret",
+      text: "very sensitive",
+      noteType: "plain-text",
+      protected: true,
+      appData: { "org.standardnotes.sn": { locked: true } },
+    });
+    const content = await encryptString(contentJson, perItemKey, aad);
+
+    const fakeRaw = {
+      uuid: noteUuid,
+      content_type: "Note",
+      content,
+      enc_item_key,
+      items_key_id: itemsKeyUuid,
+      created_at: "",
+      updated_at: "",
+    };
+    const keyMap = new Map<string, Uint8Array>([[itemsKeyUuid, itemsKeyBytes]]);
+    const dec = await decryptNote(fakeRaw, keyMap);
+    expect(dec.protected).toBe(true);
+    expect(dec.locked).toBe(true);
+    // Content is still decrypted — gating against the flags is the tool
+    // layer's job; the protocol layer just reports what's on the wire.
+    expect(dec.title).toBe("Secret");
+    expect(dec.text).toBe("very sensitive");
   });
 
   it("round-trips an items_key (wrapping key + content.itemsKey)", async () => {
