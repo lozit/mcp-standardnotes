@@ -1,6 +1,6 @@
 {
   "name": "mcp-standardnotes",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "description": "MCP server giving Claude end-to-end encrypted access to a Standard Notes vault (protocol 004, local stdio only)",
   "license": "MIT",
   "author": "Guillaume Ferrari",

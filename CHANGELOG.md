@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.6] — 2026-06-03
+
+### Added
+
+- Surface Standard Notes' `protected` and `locked` flags on `DecryptedNote`, `Note`, and `NoteSummary`. `protected` (top-level content flag — SN requires re-auth to view) and `locked` (`appData["org.standardnotes.sn"].locked`, the edit-lock) are now read from the decrypted payload and surfaced through the API. Pinned by a round-trip test in `protocol004.test.ts`.
+
+### Security
+
+- **MCP tools now refuse to leak or modify user-protected notes.** `notes_list` and `notes_search` mask `title` and `preview` to `[Protected]` / `""` for notes the user marked `protected` in Standard Notes — those bodies never reach the LLM context. `notes_get` refuses to surface a protected note's content with an explicit error. `notes_update` and `notes_delete` refuse to write a note that is either `protected` or `locked` and do **not** call into the client when refused. `locked` notes stay readable (the SN semantics is read-only, not hidden), they're just write-blocked. Behavior pinned by 8 new tests in `tools/notes.test.ts`.
+
+  Picked up from #1 by @s7eve1230, with two corrections: (i) the original PR
+  bundled an already-merged `syncToken` reset (the cold-boot full-sync fix
+  landed in 0.3.3) and (ii) it only blocked reads, leaving `notes_update` and
+  `notes_delete` wide open — a protected note could be silently overwritten
+  via its uuid. Thanks for surfacing the gap.
+
 ## [0.3.5] — 2026-06-03
 
 ### Fixed
