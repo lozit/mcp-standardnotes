@@ -60,11 +60,12 @@
     "@modelcontextprotocol/sdk": "^1.0.0",
     "keytar": "^7.9.0",
     "libsodium-wrappers-sumo": "^0.7.13",
-    "undici": "^7.25.0",
+    "undici": "^7.28.0",
     "zod": "^3.23.0"
   },
   "overrides": {
-    "fast-uri": "^3.1.2"
+    "fast-uri": "^3.1.2",
+    "hono": "^4.12.29"
   },
   "devDependencies": {
     "@types/libsodium-wrappers-sumo": "^0.7.8",
