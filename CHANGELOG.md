@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.7] — 2026-07-10
+
+### Fixed
+
+- Login against the official Standard Notes cloud (`api.standardnotes.com`) was failing again with `Non-JSON response ... 403 ... Just a moment ...` (`cf-mitigated: challenge`). Cloudflare's UA fingerprint ages out — our Chrome/131 UA had gone stale enough to be flagged as bot-like. Bumped `BROWSER_UA` to Chrome/145. Same class of gate as 0.3.2 (HTTP/2 negotiation + browser headers) — expect to have to bump the Chrome major every so often as CF's floor rises. Comment on `BROWSER_UA` calls out the symptom and the fix.
+
 ## [0.3.6] — 2026-06-03
 
 ### Added
