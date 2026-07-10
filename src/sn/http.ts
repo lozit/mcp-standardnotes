@@ -15,9 +15,14 @@ const { version: PKG_VERSION } = require("../../package.json") as {
 // challenge in Node, so we avoid triggering it: send a Chrome UA, plus the
 // Origin/Referer the SN web app would send. X-Client carries our real
 // identity for SN's backend (CF doesn't gate on it).
+//
+// CF's UA fingerprint ages out — a stale Chrome major starts drawing the
+// `cf-mitigated: challenge` response and login stops working with a
+// `Non-JSON response ... Just a moment ...` error. When that happens, bump
+// this to the current stable Chrome major.
 const BROWSER_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
-  "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+  "(KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36";
 const X_CLIENT = `mcp-standardnotes/${PKG_VERSION}`;
 const OFFICIAL_SN_HOST = "api.standardnotes.com";
 
