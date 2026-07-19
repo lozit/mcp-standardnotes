@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-07-19
+
+### Added
+
+- Nested tags (SN "folders") are now readable and writable through MCP. `tags_list` and `tags_get` surface `parentUuid` (null for top-level tags); `tags_create` accepts an optional `parent` UUID; `tags_update` accepts `parent: <uuid>` to re-parent and `parent: null` to detach. Cycles (self-parent, ancestor loop) and missing parents are rejected. The duplicate-title check is now scoped to siblings under the same parent, matching the SN app's semantics — you can have `work/notes` and `personal/notes` side by side. Wire format: a `{ uuid: <parent>, content_type: "SN|Tag", reference_type: "TagToParentTag" }` reference on the child (see `docs/protocol-004.md`). Fixes lozit/mcp-standardnotes#5.
+
 ## [0.3.7] — 2026-07-10
 
 ### Fixed
