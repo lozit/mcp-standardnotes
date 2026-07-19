@@ -393,6 +393,11 @@ export async function encryptNote(
 export interface TagReference {
   uuid: string;
   content_type: string;
+  // Present on modern SN references (see standardnotes/app
+  // packages/models .../Reference/ContenteReferenceType.ts). The parent-of
+  // link uses `reference_type: "TagToParentTag"`. Legacy note-on-tag refs
+  // written by older clients have no `reference_type` at all.
+  reference_type?: string;
 }
 
 export interface DecryptedTag {
@@ -430,15 +435,25 @@ export async function decryptTag(
   );
   const content = parseDecryptedContent<{
     title?: string;
-    references?: Array<{ uuid?: string; content_type?: string }>;
+    references?: Array<{
+      uuid?: string;
+      content_type?: string;
+      reference_type?: string;
+    }>;
   }>(contentJson, "tag", item.uuid);
   const references: TagReference[] = Array.isArray(content.references)
     ? content.references
         .filter(
-          (r): r is { uuid: string; content_type: string } =>
+          (r): r is { uuid: string; content_type: string; reference_type?: string } =>
             typeof r?.uuid === "string" && typeof r?.content_type === "string",
         )
-        .map((r) => ({ uuid: r.uuid, content_type: r.content_type }))
+        .map((r) => {
+          const out: TagReference = { uuid: r.uuid, content_type: r.content_type };
+          if (typeof r.reference_type === "string") {
+            out.reference_type = r.reference_type;
+          }
+          return out;
+        })
     : [];
   return {
     uuid: item.uuid,

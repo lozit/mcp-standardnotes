@@ -17,6 +17,12 @@ import {
   type TagReference,
 } from "./protocol004.js";
 import { loadSession, saveSession, type StoredSession } from "./session.js";
+import {
+  makeParentRef,
+  parentUuidOf,
+  stripParentRefs,
+  wouldCreateCycle,
+} from "./tagHierarchy.js";
 import type {
   Note,
   NoteSummary,
@@ -61,8 +67,15 @@ export interface SnClient {
   deleteNote(uuid: string, permanent: boolean): Promise<void>;
   listTags(): Promise<TagSummary[]>;
   getTag(uuid: string): Promise<Tag | null>;
-  createTag(input: { title: string }): Promise<string>;
-  updateTag(input: { uuid: string; title: string }): Promise<void>;
+  createTag(input: { title: string; parent?: string }): Promise<string>;
+  // `parent`: undefined = leave the parent link alone;
+  //          string   = re-parent under that tag UUID;
+  //          null     = move the tag back to the top level.
+  updateTag(input: {
+    uuid: string;
+    title?: string;
+    parent?: string | null;
+  }): Promise<void>;
   deleteTag(uuid: string): Promise<void>;
   attachTag(noteUuid: string, tagUuid: string): Promise<void>;
   detachTag(noteUuid: string, tagUuid: string): Promise<void>;
@@ -421,6 +434,7 @@ function toTagSummary(t: DecryptedTag): TagSummary {
     title: t.title,
     updatedAt: t.updatedAt,
     noteCount: t.references.filter((r) => r.content_type === "Note").length,
+    parentUuid: parentUuidOf(t),
   };
 }
 
@@ -433,6 +447,7 @@ function toFullTag(t: DecryptedTag): Tag {
     noteUuids: t.references
       .filter((r) => r.content_type === "Note")
       .map((r) => r.uuid),
+    parentUuid: parentUuidOf(t),
   };
 }
 
@@ -966,27 +981,70 @@ function buildClient(state: ClientState): SnClient {
       return t ? toFullTag(t) : null;
     },
 
-    async createTag({ title }) {
-      const existing = [...state.tagsCache.values()].find(
-        (t) => t.title === title,
+    async createTag({ title, parent }) {
+      if (parent !== undefined && !state.tagsCache.has(parent)) {
+        throw new Error(`Parent tag ${parent} not found`);
+      }
+      // SN allows same-title tags under different parents (like folders), so
+      // scope the duplicate check to actual siblings, not the whole vault.
+      const sibling = [...state.tagsCache.values()].find(
+        (t) => t.title === title && parentUuidOf(t) === (parent ?? null),
       );
-      if (existing) {
+      if (sibling) {
         throw new Error(
-          `Tag with title "${title}" already exists (uuid=${existing.uuid})`,
+          `Tag with title "${title}" already exists under the same parent (uuid=${sibling.uuid})`,
         );
       }
       const uuid = crypto.randomUUID();
-      await pushTag(null, { uuid, title, references: [] });
+      const references: TagReference[] =
+        parent !== undefined ? [makeParentRef(parent)] : [];
+      await pushTag(null, { uuid, title, references });
       return uuid;
     },
 
-    async updateTag({ uuid, title }) {
+    async updateTag({ uuid, title, parent }) {
       const existing = state.tagsCache.get(uuid);
       if (!existing) throw new Error(`Tag ${uuid} not found`);
+      if (title === undefined && parent === undefined) {
+        throw new Error(
+          `updateTag on ${uuid}: provide at least one of { title, parent }`,
+        );
+      }
+      let references = existing.references;
+      if (parent !== undefined) {
+        if (parent !== null) {
+          if (!state.tagsCache.has(parent)) {
+            throw new Error(`Parent tag ${parent} not found`);
+          }
+          if (wouldCreateCycle(state.tagsCache, uuid, parent)) {
+            throw new Error(
+              `Cannot make tag ${uuid} a child of ${parent}: would create a cycle`,
+            );
+          }
+        }
+        references = stripParentRefs(references);
+        if (parent !== null) references = [...references, makeParentRef(parent)];
+      }
+      const nextTitle = title ?? existing.title;
+      // Same sibling-uniqueness check as createTag, using whatever parent the
+      // tag will end up with after this update.
+      const nextParent =
+        parent !== undefined ? parent : parentUuidOf(existing);
+      const sibling = [...state.tagsCache.values()].find(
+        (t) =>
+          t.uuid !== uuid &&
+          t.title === nextTitle &&
+          parentUuidOf(t) === (nextParent ?? null),
+      );
+      if (sibling) {
+        throw new Error(
+          `Tag with title "${nextTitle}" already exists under the same parent (uuid=${sibling.uuid})`,
+        );
+      }
       await pushTag(existing, {
         uuid,
-        title,
-        references: existing.references,
+        title: nextTitle,
+        references,
       });
     },
 

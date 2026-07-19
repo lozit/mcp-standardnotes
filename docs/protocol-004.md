@@ -41,6 +41,26 @@ No AES, no ChaCha, no KDF, no HMAC, no signing is written by hand in this repo.
 
 At login: `Argon2id(password, salt = sha256(email:pw_nonce)[:16], ops=5, mem=64MB)` → 64 bytes split into `masterKey` (first 32) and `serverPassword` (last 32, hex). `serverPassword` is sent to `/v2/login` with a PKCE code verifier; `masterKey` stays local. The server returns an access_token plus a list of `SN|ItemsKey` items encrypted under `masterKey`. Each items_key (K) is used to encrypt notes and tags: a per-item random key K' is generated, the content is AEAD-encrypted under K' (XChaCha20-Poly1305 IETF), and K' itself is AEAD-encrypted under K. Payloads are serialized as `004:<nonce_hex>:<ciphertext_b64>:<aad_b64>:<additional_data_b64>`. The AAD is the UTF-8 bytes of the base64-encoded `{u: item_uuid, v: "004"}` JSON object. Signing (Ed25519 over plaintext hash) is required only for items in shared vaults; personal items use `{}` for `additional_data`.
 
+## Tag hierarchy (folders) on the wire
+
+Nested tags aren't a separate object type in SN. The parent link is a
+`content.references[]` entry stored on the **child** tag:
+
+```json
+{
+  "uuid": "<parent-tag-uuid>",
+  "content_type": "SN|Tag",
+  "reference_type": "TagToParentTag"
+}
+```
+
+A tag has at most one parent (`SNTag.parentId` returns the first
+`TagToParentTag` reference — see [`app/packages/models/.../Tag.ts`](https://github.com/standardnotes/app/blob/main/packages/models/src/Domain/Syncable/Tag/Tag.ts)). Older payloads
+predating `reference_type` used a bare `{ uuid, content_type: "SN|Tag" }`;
+that legacy shape only ever meant "parent of", so we accept it on reads.
+On writes we always emit the modern `reference_type: "TagToParentTag"`
+form. Handling of both shapes lives in [`src/sn/tagHierarchy.ts`](../src/sn/tagHierarchy.ts).
+
 ## Deliberately out of scope
 
 - **Reimplementing any cryptographic primitive.** All primitives come from `libsodium-wrappers-sumo`. We only parse/serialize the protocol 004 framing.

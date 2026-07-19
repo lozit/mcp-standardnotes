@@ -105,26 +105,26 @@ export async function startServer(): Promise<void> {
   );
   server.tool(
     "tags_list",
-    "List all tags (uuid, title, updatedAt, noteCount).",
+    "List all tags (uuid, title, updatedAt, noteCount, parentUuid).",
     tagsListInput.shape,
     wrap(t.tags_list),
   );
   server.tool(
     "tags_get",
-    "Fetch a single tag (title + linked note UUIDs) by UUID.",
+    "Fetch a single tag (title, linked note UUIDs, parentUuid) by UUID.",
     tagsGetInput.shape,
     wrap(t.tags_get),
   );
   server.tool(
     "tags_create",
-    "Create a new tag.",
+    "Create a new tag. Pass `parent` (tag UUID) to nest it under a folder.",
     tagsCreateInput.shape,
     wrap(t.tags_create),
   );
   server.tool(
     "tags_update",
-    "Rename an existing tag.",
-    tagsUpdateInput.shape,
+    "Rename a tag and/or move it in the folder hierarchy. `parent`: tag UUID to re-parent, null to detach, omit to leave unchanged.",
+    tagsUpdateInput._def.schema.shape,
     wrap(t.tags_update),
   );
   server.tool(

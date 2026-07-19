@@ -79,4 +79,49 @@ describe("protocol004 tags", () => {
       ),
     ).rejects.toThrow(/items_key_id/);
   });
+
+  // Nesting is a TagToParentTag reference stored on the CHILD (see
+  // standardnotes/app packages/models .../Tag.ts `parentId` getter). The pin
+  // here is: the reference_type marker must survive the encrypt/decrypt
+  // roundtrip so the client layer can surface `parentUuid`.
+  it("preserves reference_type on a TagToParentTag reference through the roundtrip", async () => {
+    await sodiumReady();
+    const itemsKeyBytes = await generateItemsKeyRaw();
+    const itemsKeyUuid = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const childUuid = "11111111-1111-4111-8111-111111111111";
+    const parentUuid = "22222222-2222-4222-8222-222222222222";
+
+    const encrypted = await encryptTag(
+      {
+        uuid: childUuid,
+        title: "child",
+        references: [
+          {
+            uuid: parentUuid,
+            content_type: "SN|Tag",
+            reference_type: "TagToParentTag",
+          },
+        ],
+      },
+      { uuid: itemsKeyUuid, itemsKey: itemsKeyBytes },
+    );
+    const keyMap = new Map<string, Uint8Array>([[itemsKeyUuid, itemsKeyBytes]]);
+    const dec = await decryptTag(
+      {
+        uuid: childUuid,
+        content_type: "Tag",
+        content: encrypted.content,
+        enc_item_key: encrypted.enc_item_key,
+        items_key_id: encrypted.items_key_id,
+      },
+      keyMap,
+    );
+    expect(dec.references).toEqual([
+      {
+        uuid: parentUuid,
+        content_type: "SN|Tag",
+        reference_type: "TagToParentTag",
+      },
+    ]);
+  });
 });

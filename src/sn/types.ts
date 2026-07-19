@@ -46,6 +46,10 @@ export interface TagSummary {
   title: string;
   updatedAt: string;
   noteCount: number;
+  // SN stores the folder hierarchy as a TagToParentTag reference on the child
+  // (see standardnotes/app packages/models .../Tag.ts). Top-level tags have
+  // no parent → null. A tag has at most one parent.
+  parentUuid: string | null;
 }
 
 export interface Tag {
@@ -54,6 +58,7 @@ export interface Tag {
   createdAt: string;
   updatedAt: string;
   noteUuids: string[];
+  parentUuid: string | null;
 }
 
 export interface VaultStats {

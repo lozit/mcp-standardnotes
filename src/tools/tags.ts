@@ -9,12 +9,29 @@ export const tagsListInput = z.object({});
 
 export const tagsGetInput = z.object({ uuid: uuidSchema });
 
-export const tagsCreateInput = z.object({ title: titleSchema });
-
-export const tagsUpdateInput = z.object({
-  uuid: uuidSchema,
+export const tagsCreateInput = z.object({
   title: titleSchema,
+  parent: uuidSchema
+    .optional()
+    .describe("Optional parent tag UUID (nests the new tag under it)"),
 });
+
+export const tagsUpdateInput = z
+  .object({
+    uuid: uuidSchema,
+    title: titleSchema.optional(),
+    // `null` moves the tag back to the top level; omit to leave the parent
+    // link untouched.
+    parent: uuidSchema
+      .nullable()
+      .optional()
+      .describe(
+        "Set to a tag UUID to re-parent, or null to detach from the current parent",
+      ),
+  })
+  .refine((v) => v.title !== undefined || v.parent !== undefined, {
+    message: "provide at least one of title or parent",
+  });
 
 export const tagsDeleteInput = z.object({ uuid: uuidSchema });
 

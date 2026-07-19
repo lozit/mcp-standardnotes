@@ -5,6 +5,16 @@ import { registerTagHandlers } from "./tags.js";
 function fakeClient(): SnClient {
   return {
     listNotes: vi.fn(async () => []),
+    stats: vi.fn(async () => ({
+      notes: { total: 0, active: 0, trashed: 0 },
+      tags: 0,
+      byNoteType: {},
+      totalTextBytes: 0,
+      averageTextBytes: 0,
+      largest: null,
+      oldest: null,
+      newest: null,
+    })),
     searchNotes: vi.fn(async () => []),
     getNote: vi.fn(async () => null),
     createNote: vi.fn(async () => "11111111-1111-4111-8111-111111111111"),
@@ -69,5 +79,58 @@ describe("tag tool input validation", () => {
       tags: 2,
       syncedAt: "2026-04-15T00:00:00Z",
     });
+  });
+
+  it("tags_create forwards an optional parent uuid to the client", async () => {
+    const c = fakeClient();
+    const h = registerTagHandlers(c);
+    await h.tags_create({
+      title: "child",
+      parent: "33333333-3333-4333-8333-333333333333",
+    });
+    expect(c.createTag).toHaveBeenCalledWith({
+      title: "child",
+      parent: "33333333-3333-4333-8333-333333333333",
+    });
+  });
+
+  it("tags_create rejects a malformed parent uuid", async () => {
+    const h = registerTagHandlers(fakeClient());
+    await expect(
+      h.tags_create({ title: "child", parent: "not-a-uuid" }),
+    ).rejects.toThrow();
+  });
+
+  it("tags_update accepts parent-only (re-parent without rename)", async () => {
+    const c = fakeClient();
+    const h = registerTagHandlers(c);
+    await h.tags_update({
+      uuid: "44444444-4444-4444-8444-444444444444",
+      parent: "55555555-5555-4555-8555-555555555555",
+    });
+    expect(c.updateTag).toHaveBeenCalledWith({
+      uuid: "44444444-4444-4444-8444-444444444444",
+      parent: "55555555-5555-4555-8555-555555555555",
+    });
+  });
+
+  it("tags_update accepts parent: null (detach from folder)", async () => {
+    const c = fakeClient();
+    const h = registerTagHandlers(c);
+    await h.tags_update({
+      uuid: "44444444-4444-4444-8444-444444444444",
+      parent: null,
+    });
+    expect(c.updateTag).toHaveBeenCalledWith({
+      uuid: "44444444-4444-4444-8444-444444444444",
+      parent: null,
+    });
+  });
+
+  it("tags_update requires at least one of title or parent", async () => {
+    const h = registerTagHandlers(fakeClient());
+    await expect(
+      h.tags_update({ uuid: "44444444-4444-4444-8444-444444444444" }),
+    ).rejects.toThrow(/at least one of title or parent/);
   });
 });
