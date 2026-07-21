@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] — 2026-07-21
+
+### Added
+
+- `notes_list` accepts an optional `includeDescendants: boolean` (default `false`). When filtering by tag, setting it to `true` also returns notes filed under any child, grandchild, etc. — same behavior as clicking a folder in the SN sidebar. Existing callers are unaffected. Useful for the "knowledge base" pattern where the parent tag is an empty container and every note lives on a descendant (see [issue #5](https://github.com/lozit/mcp-standardnotes/issues/5) discussion). Backed by a new `subtreeTagUuids` helper in `src/sn/tagHierarchy.ts` (BFS, defensive against pre-existing vault cycles).
+
 ## [0.4.0] — 2026-07-19
 
 ### Added
