@@ -18,6 +18,12 @@ export const listInput = z.object({
     .max(256)
     .optional()
     .describe("Filter by tag UUID or title (case-insensitive)"),
+  includeDescendants: z
+    .boolean()
+    .default(false)
+    .describe(
+      "When `tag` is set, also include notes filed under any descendant tag (SN folder behavior). Off by default.",
+    ),
 });
 
 export const statsInput = z.object({});

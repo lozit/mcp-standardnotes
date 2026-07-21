@@ -81,12 +81,33 @@ describe("tool input validation", () => {
       limit: 50,
       offset: 0,
       includeTrashed: false,
+      includeDescendants: false,
     });
   });
 
   it("notes_list rejects limit > 200", async () => {
     const h = registerNoteHandlers(fakeClient());
     await expect(h.notes_list({ limit: 500 })).rejects.toThrow();
+  });
+
+  it("notes_list forwards includeDescendants to the client", async () => {
+    const c = fakeClient();
+    const h = registerNoteHandlers(c);
+    await h.notes_list({ tag: "Knowledge Base", includeDescendants: true });
+    expect(c.listNotes).toHaveBeenCalledWith({
+      limit: 50,
+      offset: 0,
+      includeTrashed: false,
+      tag: "Knowledge Base",
+      includeDescendants: true,
+    });
+  });
+
+  it("notes_list rejects a non-boolean includeDescendants", async () => {
+    const h = registerNoteHandlers(fakeClient());
+    await expect(
+      h.notes_list({ includeDescendants: "yes" as unknown as boolean }),
+    ).rejects.toThrow();
   });
 
   it("notes_get rejects non-uuid", async () => {

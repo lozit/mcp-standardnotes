@@ -21,6 +21,7 @@ import {
   makeParentRef,
   parentUuidOf,
   stripParentRefs,
+  subtreeTagUuids,
   wouldCreateCycle,
 } from "./tagHierarchy.js";
 import type {
@@ -39,6 +40,10 @@ export interface SnClient {
     offset: number;
     includeTrashed: boolean;
     tag?: string;
+    // When filtering by tag, also match notes tagged with any descendant
+    // (SN sidebar "folder" behavior). Off by default so existing callers
+    // keep the strict direct-tag semantics.
+    includeDescendants?: boolean;
   }): Promise<NoteSummary[]>;
   stats(): Promise<VaultStats>;
   searchNotes(query: string, limit: number): Promise<NoteSummary[]>;
@@ -641,7 +646,7 @@ function buildClient(state: ClientState): SnClient {
   };
 
   return {
-    async listNotes({ limit, offset, includeTrashed, tag }) {
+    async listNotes({ limit, offset, includeTrashed, tag, includeDescendants }) {
       let allowedNoteUuids: Set<string> | null = null;
       if (tag !== undefined && tag !== "") {
         const matched =
@@ -652,11 +657,21 @@ function buildClient(state: ClientState): SnClient {
         if (!matched) {
           throw new Error(`Tag not found: ${tag}`);
         }
-        allowedNoteUuids = new Set(
-          matched.references
-            .filter((r) => r.content_type === "Note")
-            .map((r) => r.uuid),
-        );
+        // With includeDescendants, walk the sub-tree from the matched tag
+        // and union the note refs of every tag inside it. Mirrors the SN
+        // sidebar: clicking a parent folder shows every note filed under
+        // any child, grandchild, etc.
+        const tagUuids = includeDescendants
+          ? subtreeTagUuids(state.tagsCache, matched.uuid)
+          : new Set([matched.uuid]);
+        allowedNoteUuids = new Set<string>();
+        for (const uuid of tagUuids) {
+          const t = state.tagsCache.get(uuid);
+          if (!t) continue;
+          for (const r of t.references) {
+            if (r.content_type === "Note") allowedNoteUuids.add(r.uuid);
+          }
+        }
       }
       const all = [...state.notesCache.values()]
         .filter((n) => includeTrashed || !n.trashed)

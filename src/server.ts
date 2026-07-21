@@ -57,7 +57,7 @@ export async function startServer(): Promise<void> {
 
   server.tool(
     "notes_list",
-    "List notes (decrypted locally). Returns uuid/title/updatedAt/preview. Optional `tag` filters by tag UUID or title.",
+    "List notes (decrypted locally). Returns uuid/title/updatedAt/preview. Optional `tag` filters by tag UUID or title; set `includeDescendants: true` to also include notes filed under any child/grandchild tag (SN folder behavior).",
     listInput.shape,
     wrap(h.notes_list),
   );
