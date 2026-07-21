@@ -65,7 +65,10 @@
   },
   "overrides": {
     "fast-uri": "^3.1.2",
-    "hono": "^4.12.29"
+    "hono": "^4.12.29",
+    "brace-expansion@1": "^1.1.16",
+    "brace-expansion@2": "^2.1.2",
+    "js-yaml": "^4.2.1"
   },
   "devDependencies": {
     "@types/libsodium-wrappers-sumo": "^0.7.8",
