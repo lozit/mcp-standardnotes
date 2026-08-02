@@ -1,0 +1,21 @@
+# Weekly npm dep sweep; SDK bumps arrive as individual PRs so any change to
+# @modelcontextprotocol/sdk (the primary signal for MCP spec evolution) is
+# never buried in a group PR. Dev-only deps (ESLint, TS, vitest, …) are
+# batched to keep the PR volume manageable.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      dev-deps:
+        dependency-type: development
+    open-pull-requests-limit: 5
+  # GitHub Actions move slowly and mostly matter when runner Node versions
+  # shift — monthly is enough to keep actions/checkout, actions/setup-node
+  # etc. from rotting.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
