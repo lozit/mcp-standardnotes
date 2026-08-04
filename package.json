@@ -60,7 +60,7 @@
     "@modelcontextprotocol/sdk": "^1.0.0",
     "keytar": "^7.9.0",
     "libsodium-wrappers-sumo": "^0.7.13",
-    "undici": "^7.29.0",
+    "undici": "^8.9.0",
     "zod": "^3.23.0"
   },
   "overrides": {
