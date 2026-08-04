@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] — 2026-08-04
+
+### Fixed
+
+- Login against `api.standardnotes.com` was starting to fail with HTTP 403 `cf-mitigated: challenge` (`Non-JSON response ... Just a moment ...`). Between v0.3.2 and v0.5.0 the client sent a Chrome User-Agent plus `Origin`/`Referer` to slip past Cloudflare's JS challenge; that gambit is now counter-productive — CF cross-checks UA against TLS fingerprint and scores "claims to be Chrome, non-browser handshake" as impersonation, blocking it harder than honest non-browser clients. Reverted to an honest `mcp-standardnotes/<version>` User-Agent with no `Origin`/`Referer` injection. Reproduced from a residential IP on 2026-08-04, matching the datacenter report in [issue #6](https://github.com/lozit/mcp-standardnotes/issues/6). HTTP/2 negotiation (`allowH2`) and the `X-SNJS-Version` / `X-Application-Version` gate headers are unchanged.
+
+### Security
+
+- Bumped `undici` to `^7.29.0` (runtime dep) to clear five HIGH advisories: response desynchronization via retry interceptor (GHSA-8xcm-r25x-g524), cross-user info disclosure via private-cache directives (GHSA-4cwx-7wf7-3272), CRLF injection via blob body (GHSA-m8rv-5g2x-5cg5), Cache-Control whitespace desync (GHSA-jr45-8vmc-qm54), cookie attribute injection (GHSA-v3r7-h72x-cjcm).
+- Added `overrides` for transitive HIGH advisories: `brace-expansion` `^2.1.4` (GHSA-mh99-v99m-4gvg, unbounded expansion OOM crash — replaces the branch-scoped overrides added in v0.4.1), `ip-address` `^10.4.0` (GHSA-mwp4-54f8-5fhr, Address4 leading-zero SSRF; GHSA-v2v4-37r5-5v8g, Address6 XSS), `postcss` `^8.5.23` (GHSA-r28c-9q8g-f849 + GHSA-fxqj-rqcc-2cmp, path traversal via sourceMappingURL — devDep transitive only). Bumped existing `fast-uri` (`^3.1.5`, GHSA-v2hh-gcrm-f6hx / -4c8g-83qw-93j6 / -7p8r-x3mc-p8w7 host confusion) and `hono` (`^4.12.34`) overrides.
+
 ## [0.5.0] — 2026-07-21
 
 ### Added
