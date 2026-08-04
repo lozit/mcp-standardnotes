@@ -10,21 +10,22 @@ const { version: PKG_VERSION } = require("../../package.json") as {
   version: string;
 };
 
-// Cloudflare in front of api.standardnotes.com serves a JS challenge to
-// requests whose headers don't look like a real browser. We can't solve the
-// challenge in Node, so we avoid triggering it: send a Chrome UA, plus the
-// Origin/Referer the SN web app would send. X-Client carries our real
-// identity for SN's backend (CF doesn't gate on it).
+// Do NOT spoof a browser User-Agent. Between v0.3.2 (2026-02) and v0.5.0
+// (2026-07) we sent a Chrome UA + Origin/Referer to slip past Cloudflare's
+// JS challenge, and it worked. It stopped working around 2026-08: CF now
+// scores "claims to be Chrome but has a non-browser TLS fingerprint" as
+// impersonation and challenges HARDER — HTTP 403, `cf-mitigated: challenge`.
+// An honest UA that identifies the project passes cleanly on the same edge
+// (see issue #6, reproduced from a residential IP on 2026-08-04).
 //
-// CF's UA fingerprint ages out — a stale Chrome major starts drawing the
-// `cf-mitigated: challenge` response and login stops working with a
-// `Non-JSON response ... Just a moment ...` error. When that happens, bump
-// this to the current stable Chrome major.
-const BROWSER_UA =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
-  "(KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36";
-const X_CLIENT = `mcp-standardnotes/${PKG_VERSION}`;
-const OFFICIAL_SN_HOST = "api.standardnotes.com";
+// If login ever returns "Non-JSON response ... Just a moment ...", the fix
+// is NOT to reintroduce browser spoofing — that direction is closed. Check
+// first that api.standardnotes.com hasn't added a new gate (e.g. requiring
+// a header we're not sending, or a stricter version floor in X-SNJS-Version
+// / X-Application-Version) by comparing against upstream github.com/
+// jonhadfield/gosn-v2 (common/client_headers.go).
+const HONEST_UA = `mcp-standardnotes/${PKG_VERSION}`;
+const X_CLIENT = HONEST_UA;
 
 // Standard Notes' api-gateway (since ~2026-05) rejects any request missing
 // these two version headers with HTTP 400 "Your client version is no longer
@@ -35,14 +36,6 @@ const OFFICIAL_SN_HOST = "api.standardnotes.com";
 // gosn-v2 (common/client_headers.go), which hit the same wall.
 const SNJS_VERSION = "2.211.7";
 const APP_VERSION = "Desktop-3.201.27";
-
-function isOfficialSn(url: string): boolean {
-  try {
-    return new URL(url).hostname === OFFICIAL_SN_HOST;
-  } catch {
-    return false;
-  }
-}
 
 export interface HttpConfig {
   serverUrl: string;
@@ -168,7 +161,10 @@ interface SnEnvelope<T> {
 
 async function snFetch<T>(url: string, init: RequestInit): Promise<T> {
   const headers = new Headers(init.headers);
-  if (!headers.has("User-Agent")) headers.set("User-Agent", BROWSER_UA);
+  // Honest UA (see HONEST_UA declaration above). Do NOT reintroduce
+  // browser-UA spoofing here — Cloudflare now challenges impersonators
+  // harder than honest non-browser clients.
+  if (!headers.has("User-Agent")) headers.set("User-Agent", HONEST_UA);
   if (!headers.has("X-Client")) headers.set("X-Client", X_CLIENT);
   // Required by the SN api-gateway (see SNJS_VERSION / APP_VERSION above).
   if (!headers.has("X-SNJS-Version")) {
@@ -182,14 +178,6 @@ async function snFetch<T>(url: string, init: RequestInit): Promise<T> {
   }
   if (!headers.has("Accept-Language")) {
     headers.set("Accept-Language", "en-US,en;q=0.9");
-  }
-  if (isOfficialSn(url)) {
-    if (!headers.has("Origin")) {
-      headers.set("Origin", "https://app.standardnotes.com");
-    }
-    if (!headers.has("Referer")) {
-      headers.set("Referer", "https://app.standardnotes.com/");
-    }
   }
   const finalInit = {
     ...init,

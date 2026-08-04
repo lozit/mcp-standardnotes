@@ -31,7 +31,12 @@ function lastRequestHeaders(): Headers {
 describe("snFetch (via getLoginParams)", () => {
   afterEach(() => fetchMock.mockReset());
 
-  it("sends a Chrome-like User-Agent so Cloudflare doesn't serve a JS challenge", async () => {
+  // Pins the reversal shipped in v0.5.1 for issue #6: an honest UA that
+  // identifies the project passes Cloudflare cleanly, whereas the Chrome-UA
+  // spoofing we did between v0.3.2 and v0.5.0 is now flagged as impersonation
+  // (HTTP 403, cf-mitigated: challenge) because CF cross-checks UA vs TLS
+  // fingerprint. Reproduced from a residential IP on 2026-08-04.
+  it("sends an honest project User-Agent (no browser spoofing)", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(validLoginParams));
 
     await getLoginParams(
@@ -40,9 +45,9 @@ describe("snFetch (via getLoginParams)", () => {
       "challenge",
     );
 
-    expect(lastRequestHeaders().get("User-Agent")).toMatch(
-      /Mozilla\/5\.0.*Chrome\//,
-    );
+    const ua = lastRequestHeaders().get("User-Agent");
+    expect(ua).toMatch(/^mcp-standardnotes\/\d+\.\d+\.\d+$/);
+    expect(ua).not.toMatch(/Mozilla|Chrome|Safari/);
   });
 
   it("identifies the real client via X-Client header (with version)", async () => {
@@ -73,7 +78,11 @@ describe("snFetch (via getLoginParams)", () => {
     expect(headers.get("X-Application-Version")).toMatch(/^\w+-\d+\.\d+\.\d+$/);
   });
 
-  it("sends Origin/Referer when talking to the official SN host", async () => {
+  // Origin/Referer used to be injected on the official SN host to look like
+  // the SN web app; that gambit is gone as of v0.5.1 (issue #6). Test both
+  // the official cloud and a self-hosted URL to pin that neither branch
+  // adds them anymore.
+  it("never sends Origin/Referer regardless of host", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(validLoginParams));
 
     await getLoginParams(
@@ -81,13 +90,11 @@ describe("snFetch (via getLoginParams)", () => {
       "a@b.co",
       "challenge",
     );
+    let headers = lastRequestHeaders();
+    expect(headers.get("Origin")).toBeNull();
+    expect(headers.get("Referer")).toBeNull();
 
-    const headers = lastRequestHeaders();
-    expect(headers.get("Origin")).toBe("https://app.standardnotes.com");
-    expect(headers.get("Referer")).toBe("https://app.standardnotes.com/");
-  });
-
-  it("omits Origin/Referer for self-hosted servers", async () => {
+    fetchMock.mockReset();
     fetchMock.mockResolvedValueOnce(jsonResponse(validLoginParams));
 
     await getLoginParams(
@@ -95,11 +102,9 @@ describe("snFetch (via getLoginParams)", () => {
       "a@b.co",
       "challenge",
     );
-
-    const headers = lastRequestHeaders();
+    headers = lastRequestHeaders();
     expect(headers.get("Origin")).toBeNull();
     expect(headers.get("Referer")).toBeNull();
-    expect(headers.get("User-Agent")).toMatch(/Mozilla\/5\.0/);
     expect(headers.get("X-Client")).toMatch(/^mcp-standardnotes\//);
   });
 
