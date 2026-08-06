@@ -103,6 +103,8 @@ Then `/mcp` to reconnect.
 
 **Self-hosting Standard Notes?** See [docs/self-hosted.md](./docs/self-hosted.md) for the docker-compose recipe and how to pin your TLS certificate.
 
+**Want a remote agent (Hermes on a VPS, self-hosted LangGraph, etc.) to use your vault?** See [docs/remote-agent-bridge.md](./docs/remote-agent-bridge.md) for the full Cloudflare Tunnel + Access setup. Your master key stays on your Mac; the agent talks to a public HTTPS endpoint gated by a Cloudflare service token.
+
 ## Configuration
 
 | Variable | Default | Description |
