@@ -17,6 +17,7 @@ import {
   type TagReference,
 } from "./protocol004.js";
 import { loadSession, saveSession, type StoredSession } from "./session.js";
+import { cacheTtlMs, ensureFresh } from "./cache.js";
 import {
   makeParentRef,
   parentUuidOf,
@@ -104,7 +105,18 @@ interface ClientState {
   tagsCache: Map<string, DecryptedTag>;
   encryptedItemsRaw: Map<string, http.RawItem>;
   syncToken: string | null;
+  // Timestamp (ms) of the last successful fullSync — drives ensureFresh's
+  // TTL check. Set to 0 before the first sync so ensureFresh always fires.
+  lastSyncAt: number;
+  // UUIDs whose payload failed to decrypt on the most recent fullSync
+  // pass. Reset at the start of every fullSync so a fix upstream (e.g. an
+  // items_key that arrives on a later sync page) can clear the count.
+  decryptFailedNotes: Set<string>;
+  decryptFailedTags: Set<string>;
 }
+
+// Cache TTL policy lives in ./cache.ts so the ensureFresh helper can be
+// unit-tested without spinning up the full crypto+http stack.
 
 export async function createClientFromLogin(
   config: SnClientConfig,
@@ -181,6 +193,9 @@ export async function createClientFromLogin(
     tagsCache: new Map(),
     encryptedItemsRaw: new Map(),
     syncToken: null,
+    lastSyncAt: 0,
+    decryptFailedNotes: new Set(),
+    decryptFailedTags: new Set(),
   };
 
   await saveSession(config.email, {
@@ -236,6 +251,9 @@ export async function createClientFromSession(
     // stored syncToken remains in the persisted session for future
     // reuse if we ever start caching the encrypted vault snapshot too.
     syncToken: null,
+    lastSyncAt: 0,
+    decryptFailedNotes: new Set(),
+    decryptFailedTags: new Set(),
   };
   await fullSync(state);
   return buildClient(state);
@@ -298,6 +316,10 @@ async function callSync(
 }
 
 async function fullSync(state: ClientState): Promise<void> {
+  // Reset the failure counters at the top so a fix upstream (e.g. an
+  // items_key that arrives on a later page) doesn't leave stale entries.
+  state.decryptFailedNotes.clear();
+  state.decryptFailedTags.clear();
   let cursorToken: string | undefined;
   let syncToken: string | undefined = state.syncToken ?? undefined;
   // eslint-disable-next-line no-constant-condition
@@ -355,6 +377,7 @@ async function fullSync(state: ClientState): Promise<void> {
       const note = await decryptNote(item, itemsKeyBytesByUuid);
       state.notesCache.set(note.uuid, note);
     } catch (err) {
+      state.decryptFailedNotes.add(item.uuid);
       logger.warn(`Failed to decrypt note ${item.uuid}`, {
         message: err instanceof Error ? err.message : String(err),
       });
@@ -368,16 +391,21 @@ async function fullSync(state: ClientState): Promise<void> {
       const tag = await decryptTag(item, itemsKeyBytesByUuid);
       state.tagsCache.set(tag.uuid, tag);
     } catch (err) {
+      state.decryptFailedTags.add(item.uuid);
       logger.warn(`Failed to decrypt tag ${item.uuid}`, {
         message: err instanceof Error ? err.message : String(err),
       });
     }
   }
 
+  state.lastSyncAt = Date.now();
+
   logger.info("Sync complete", {
     notes: state.notesCache.size,
     tags: state.tagsCache.size,
     itemsKeys: state.itemsKeys.size,
+    decryptFailedNotes: state.decryptFailedNotes.size,
+    decryptFailedTags: state.decryptFailedTags.size,
   });
 
   try {
@@ -647,6 +675,7 @@ function buildClient(state: ClientState): SnClient {
 
   return {
     async listNotes({ limit, offset, includeTrashed, tag, includeDescendants }) {
+      await ensureFresh(state, cacheTtlMs(), () => fullSync(state));
       let allowedNoteUuids: Set<string> | null = null;
       if (tag !== undefined && tag !== "") {
         const matched =
@@ -681,6 +710,7 @@ function buildClient(state: ClientState): SnClient {
     },
 
     async stats() {
+      await ensureFresh(state, cacheTtlMs(), () => fullSync(state));
       const notes = [...state.notesCache.values()];
       const active = notes.filter((n) => !n.trashed);
       const byNoteType: Record<string, number> = {};
@@ -720,10 +750,17 @@ function buildClient(state: ClientState): SnClient {
         largest,
         oldest,
         newest,
+        syncedAt: new Date(state.lastSyncAt).toISOString(),
+        cacheAgeMs: Date.now() - state.lastSyncAt,
+        decryptFailures: {
+          notes: state.decryptFailedNotes.size,
+          tags: state.decryptFailedTags.size,
+        },
       };
     },
 
     async searchNotes(query, limit) {
+      await ensureFresh(state, cacheTtlMs(), () => fullSync(state));
       const q = query.toLowerCase();
       const hits: DecryptedNote[] = [];
       for (const n of state.notesCache.values()) {
@@ -740,6 +777,7 @@ function buildClient(state: ClientState): SnClient {
     },
 
     async getNote(uuid) {
+      await ensureFresh(state, cacheTtlMs(), () => fullSync(state));
       const n = state.notesCache.get(uuid);
       return n ? toFullNote(n, state.tagsCache) : null;
     },
@@ -895,6 +933,10 @@ function buildClient(state: ClientState): SnClient {
     },
 
     async updateNote({ uuid, title, text, noteType, tags }) {
+      // Sync inconditionnel avant mutation : sinon on peut écraser une
+      // révision plus récente produite par une autre instance du serveur
+      // (cf. intakes/mcp-standardnotes-cache-staleness.md).
+      await ensureFresh(state, 0, () => fullSync(state));
       const existing = state.notesCache.get(uuid);
       if (!existing) throw new Error(`Note ${uuid} not found`);
       const raw = state.encryptedItemsRaw.get(uuid);
@@ -933,6 +975,7 @@ function buildClient(state: ClientState): SnClient {
     },
 
     async deleteNote(uuid, permanent) {
+      await ensureFresh(state, 0, () => fullSync(state));
       const raw = state.encryptedItemsRaw.get(uuid);
       if (!raw) throw new Error(`Note ${uuid} not found`);
       if (permanent) {
@@ -986,17 +1029,22 @@ function buildClient(state: ClientState): SnClient {
     },
 
     async listTags() {
+      await ensureFresh(state, cacheTtlMs(), () => fullSync(state));
       return [...state.tagsCache.values()]
         .sort((a, b) => a.title.localeCompare(b.title))
         .map(toTagSummary);
     },
 
     async getTag(uuid) {
+      await ensureFresh(state, cacheTtlMs(), () => fullSync(state));
       const t = state.tagsCache.get(uuid);
       return t ? toFullTag(t) : null;
     },
 
     async createTag({ title, parent }) {
+      // Sync forcé : le duplicate-title-under-same-parent check ne vaut
+      // rien sur un cache périmé.
+      await ensureFresh(state, 0, () => fullSync(state));
       if (parent !== undefined && !state.tagsCache.has(parent)) {
         throw new Error(`Parent tag ${parent} not found`);
       }
@@ -1018,6 +1066,7 @@ function buildClient(state: ClientState): SnClient {
     },
 
     async updateTag({ uuid, title, parent }) {
+      await ensureFresh(state, 0, () => fullSync(state));
       const existing = state.tagsCache.get(uuid);
       if (!existing) throw new Error(`Tag ${uuid} not found`);
       if (title === undefined && parent === undefined) {
@@ -1064,6 +1113,7 @@ function buildClient(state: ClientState): SnClient {
     },
 
     async deleteTag(uuid) {
+      await ensureFresh(state, 0, () => fullSync(state));
       const raw = state.encryptedItemsRaw.get(uuid);
       if (!raw) throw new Error(`Tag ${uuid} not found`);
       await pushItems([
@@ -1081,10 +1131,12 @@ function buildClient(state: ClientState): SnClient {
     },
 
     async attachTag(noteUuid, tagUuid) {
+      await ensureFresh(state, 0, () => fullSync(state));
       await attachTagInternal(noteUuid, tagUuid);
     },
 
     async detachTag(noteUuid, tagUuid) {
+      await ensureFresh(state, 0, () => fullSync(state));
       await detachTagInternal(noteUuid, tagUuid);
     },
 

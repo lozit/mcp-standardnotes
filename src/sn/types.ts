@@ -70,4 +70,18 @@ export interface VaultStats {
   largest: { uuid: string; title: string; bytes: number } | null;
   oldest: { uuid: string; title: string; createdAt: string } | null;
   newest: { uuid: string; title: string; updatedAt: string } | null;
+  // ISO timestamp of the last successful fullSync. Lets the caller reason
+  // about staleness: two instances of the server pointing at the same
+  // vault only see each other's writes after their local cache has been
+  // refreshed. See docs/protocol-004.md and cache staleness notes.
+  syncedAt: string;
+  // Age of the cache in ms at the moment this stats snapshot was taken.
+  // Redundant with syncedAt for a consumer that knows "now", but a LLM
+  // reasoning about freshness in a prompt appreciates the direct number.
+  cacheAgeMs: number;
+  // UUIDs of encrypted items the last fullSync failed to decrypt. Non-zero
+  // usually signals a missing items_key (e.g. a shared-vault key not
+  // provisioned to this client). Exposed rather than silently filtered so
+  // a "119 total, only 116 in the list" discrepancy is diagnosable.
+  decryptFailures: { notes: number; tags: number };
 }
