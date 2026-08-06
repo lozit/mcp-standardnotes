@@ -6,3 +6,6 @@ dist/
 .DS_Store
 coverage/
 .vitest/
+
+# Personal drafts / problem descriptions (never pushed)
+intakes/
