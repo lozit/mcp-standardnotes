@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — 2026-08-06
+
+### Added
+
+- **Cache TTL refresh + forced-sync-before-writes.** Every read tool (`notes_list`, `notes_get`, `notes_search`, `notes_stats`, `tags_list`, `tags_get`) now refreshes the local cache when it's older than 30 seconds — configurable via `SN_CACHE_TTL_MS` (in milliseconds). Every mutation tool (`notes_update`, `notes_delete`, `tags_create`, `tags_update`, `tags_delete`, `tags_attach`, `tags_detach`) now refreshes unconditionally before touching anything, so a second instance of the server can't overwrite a fresher revision produced by another lane. Fixes the "two long-running instances of the server are blind to each other's writes and can silently overwrite fresher revisions" class of bug that arises whenever the server is embedded in an always-on agent (e.g. a Hermes on a VPS + a local Claude Code). Set `SN_CACHE_TTL_MS=-1` to restore the pre-fix "sync only at boot" behavior as an emergency rollback lever; set `0` for strict per-call sync.
+- **`notes_stats` reports staleness explicitly.** New fields: `syncedAt` (ISO timestamp of the last successful sync), `cacheAgeMs` (age of the cache snapshot at the moment the stats were computed), and `decryptFailures: { notes: number, tags: number }` (counts of encrypted items the current sync could not decrypt — previously silently filtered from listings while still counted in totals, causing an ambiguous "N total, N-3 in the list" discrepancy in diagnostics).
+
 ## [0.5.1] — 2026-08-04
 
 ### Fixed
