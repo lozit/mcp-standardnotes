@@ -184,7 +184,17 @@ async function snFetch<T>(url: string, init: RequestInit): Promise<T> {
     headers,
     dispatcher: getDispatcher(),
   };
-  const res = await fetch(url, finalInit as Parameters<typeof fetch>[1]);
+  // Two-step cast via unknown: @types/node ≥26 makes DOM Headers extend
+  // SpecIterableIterator (with .map/.filter/.take/.drop), while undici's own
+  // Headers type is still the older shape. TS then rejects a direct
+  // `finalInit as Parameters<typeof fetch>[1]` cast even though the runtime
+  // shapes are compatible. `as unknown as` is the standard escape hatch
+  // sanctioned by the TS diagnostic ("If this was intentional, convert the
+  // expression to 'unknown' first.").
+  const res = await fetch(
+    url,
+    finalInit as unknown as Parameters<typeof fetch>[1],
+  );
   if (res.status === 429) {
     const retryAfter = res.headers.get("retry-after");
     const hint = retryAfter ? ` Retry after ${retryAfter}s.` : "";
