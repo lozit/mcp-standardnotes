@@ -1,17 +1,33 @@
 # Weekly npm dep sweep; SDK bumps arrive as individual PRs so any change to
 # @modelcontextprotocol/sdk (the primary signal for MCP spec evolution) is
 # never buried in a group PR. Dev-only deps (ESLint, TS, vitest, …) are
-# batched to keep the PR volume manageable.
+# batched to keep the PR volume manageable — BUT only minor/patch bumps go
+# in the group; devDep majors get their own PR each so they can be reviewed
+# and merged (or refused) independently. This is a lesson from a previous
+# group PR that bundled 7 devDep majors and became unmergeable.
 version: 2
 updates:
   - package-ecosystem: npm
     directory: "/"
     schedule:
       interval: weekly
+    open-pull-requests-limit: 5
+    ignore:
+      # undici 8+ requires Node >=22.19 (we pin engines.node to >=20).
+      # See project memory: undici stays on 7.x for h2 compatibility with
+      # api.standardnotes.com behind Cloudflare.
+      - dependency-name: "undici"
+        update-types: ["version-update:semver-major"]
+      # Zod 4 is a full-codebase migration with breaking API changes across
+      # every tool schema. Not chore-tier — handle via a dedicated issue.
+      - dependency-name: "zod"
+        update-types: ["version-update:semver-major"]
     groups:
       dev-deps:
         dependency-type: development
-    open-pull-requests-limit: 5
+        update-types:
+          - "minor"
+          - "patch"
   # GitHub Actions move slowly and mostly matter when runner Node versions
   # shift — monthly is enough to keep actions/checkout, actions/setup-node
   # etc. from rotting.
