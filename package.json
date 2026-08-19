@@ -79,7 +79,7 @@
     "@typescript-eslint/parser": "^7.0.0",
     "eslint": "^8.57.0",
     "tsx": "^4.15.0",
-    "typescript": "^5.4.0",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.8"
   },
   "engines": {
