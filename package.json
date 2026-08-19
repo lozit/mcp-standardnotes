@@ -73,7 +73,7 @@
     "nanoid": "^3.3.18"
   },
   "devDependencies": {
-    "@types/libsodium-wrappers-sumo": "^0.7.8",
+    "@types/libsodium-wrappers-sumo": "^0.8.2",
     "@types/node": "^20.14.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
