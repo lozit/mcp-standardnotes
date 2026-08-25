@@ -75,7 +75,7 @@
   "devDependencies": {
     "@types/libsodium-wrappers-sumo": "^0.8.2",
     "@types/node": "^20.14.0",
-    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.67.0",
     "@typescript-eslint/parser": "^7.0.0",
     "eslint": "^8.57.0",
     "tsx": "^4.15.0",
