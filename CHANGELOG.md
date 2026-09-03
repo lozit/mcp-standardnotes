@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **User confirmation for destructive tools.** `notes_delete` and `tags_delete` now raise an MCP elicitation prompt that the person at the client must accept (checkbox) before anything is deleted. The model cannot satisfy the prompt itself; a client that does not advertise the `elicitation` capability gets a refusal instead of a silent delete; a `decline`/`cancel` aborts; nothing is cached between calls. The prompt shows the note/tag title (masked for protected notes) and whether the delete is a trash or a permanent purge. Motivation: note bodies are untrusted input that flows into the model's context, so without a human gate an injected instruction can drive an irreversible purge. Opt-out for headless deployments with `SN_CONFIRM_DESTRUCTIVE=off` (logged loudly at startup and on every bypassed call).
+- **Tool annotations.** Every tool is now registered via `registerTool` with `readOnlyHint` / `destructiveHint` / `idempotentHint` / `openWorldHint`, so MCP clients can render and permission read-only vs. destructive calls differently.
+
+### Tests
+
+- `src/security/confirm.test.ts` covers the gate and the opt-out. `src/server.test.ts` drives the full server through a real MCP `Client` over `InMemoryTransport` (annotations advertised, refusal without elicitation, decline aborts, accept deletes and re-asks next time, protected titles never appear in the prompt).
+
 ## [0.6.0] — 2026-08-06
 
 ### Added
