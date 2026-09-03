@@ -1,8 +1,14 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { logger } from "./security/logger.js";
-import { createClientFromSession } from "./sn/client.js";
+import {
+  CONFIRM_ENV,
+  confirmationDisabled,
+  requireConfirmation,
+} from "./security/confirm.js";
+import { createClientFromSession, type SnClient } from "./sn/client.js";
 import {
   createInput,
   createManyInput,
@@ -32,6 +38,34 @@ function requiredEnv(name: string): string {
   return v;
 }
 
+// Tool annotations let clients render read-only vs. destructive calls
+// differently and apply their own permission policies. They are hints only;
+// the hard gate for deletes is `requireConfirmation` below.
+const READ_ONLY: ToolAnnotations = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+};
+const WRITE: ToolAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: false,
+  openWorldHint: false,
+};
+const OVERWRITE: ToolAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: true,
+  idempotentHint: true,
+  openWorldHint: false,
+};
+const DESTRUCTIVE: ToolAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: true,
+  idempotentHint: false,
+  openWorldHint: false,
+};
+
 export async function startServer(): Promise<void> {
   const serverUrl =
     process.env.SN_SERVER_URL ?? "https://api.standardnotes.com";
@@ -55,107 +89,171 @@ export async function startServer(): Promise<void> {
       };
     };
 
-  server.tool(
+  // Handlers take `raw: unknown` and re-validate with zod themselves, so the
+  // callback is typed loosely here; the SDK still derives the JSON schema it
+  // advertises to clients from `shape`.
+  const register = (
+    name: string,
+    description: string,
+    shape: z.ZodRawShape,
+    annotations: ToolAnnotations,
+    fn: (raw: unknown) => Promise<unknown>,
+  ): void => {
+    server.registerTool(
+      name,
+      { description, inputSchema: shape, annotations },
+      (args: unknown) => wrap(fn)(args),
+    );
+  };
+
+  // ----- Destructive tools: always confirmed by the user, every call -----
+
+  const confirmedNoteDelete = async (raw: unknown) => {
+    const { uuid, permanent } = deleteInput.parse(raw);
+    const existing = await client.getNote(uuid);
+    if (!existing) throw new Error(`Note ${uuid} not found`);
+    const title = existing.protected ? "[Protected]" : existing.title || "(untitled)";
+    await requireConfirmation(server, {
+      action: permanent
+        ? `Permanently delete note "${title}"`
+        : `Move note "${title}" to Trash`,
+      details: permanent
+        ? `UUID ${uuid}. This bypasses Trash and removes the note and its history from the server.`
+        : `UUID ${uuid}. It can be restored from Trash in the Standard Notes app.`,
+    });
+    return h.notes_delete(raw);
+  };
+
+  const confirmedTagDelete = async (raw: unknown) => {
+    const { uuid } = tagsDeleteInput.parse(raw);
+    const existing = await client.getTag(uuid);
+    if (!existing) throw new Error(`Tag ${uuid} not found`);
+    await requireConfirmation(server, {
+      action: `Permanently delete tag "${existing.title || "(untitled)"}"`,
+      details:
+        `UUID ${uuid}, attached to ${existing.noteUuids.length} note(s). ` +
+        `Tags have no Trash; the notes themselves are not deleted.`,
+    });
+    return t.tags_delete(raw);
+  };
+
+  // ----- Registration -----
+
+  register(
     "notes_list",
     "List notes (decrypted locally). Returns uuid/title/updatedAt/preview. Optional `tag` filters by tag UUID or title; set `includeDescendants: true` to also include notes filed under any child/grandchild tag (SN folder behavior).",
     listInput.shape,
-    wrap(h.notes_list),
+    READ_ONLY,
+    h.notes_list,
   );
-  server.tool(
+  register(
     "notes_stats",
     "Vault statistics: counts (total/active/trashed), tags, byNoteType, sizes, oldest/newest/largest note.",
     statsInput.shape,
-    wrap(h.notes_stats),
+    READ_ONLY,
+    h.notes_stats,
   );
-  server.tool(
+  register(
     "notes_search",
     "Full-text search across decrypted notes.",
     searchInput.shape,
-    wrap(h.notes_search),
+    READ_ONLY,
+    h.notes_search,
   );
-  server.tool(
+  register(
     "notes_get",
     "Fetch a single note's full content by UUID.",
     getInput.shape,
-    wrap(h.notes_get),
+    READ_ONLY,
+    h.notes_get,
   );
-  server.tool(
-    "notes_create",
-    "Create a new note.",
-    createInput.shape,
-    wrap(h.notes_create),
-  );
-  server.tool(
+  register("notes_create", "Create a new note.", createInput.shape, WRITE, h.notes_create);
+  register(
     "notes_create_many",
     "Create up to 50 notes in a single sync push. Returns the list of created uuid+title.",
     createManyInput.shape,
-    wrap(h.notes_create_many),
+    WRITE,
+    h.notes_create_many,
   );
-  server.tool(
+  register(
     "notes_update",
     "Update an existing note by UUID.",
     updateInput._def.schema.shape,
-    wrap(h.notes_update),
+    OVERWRITE,
+    h.notes_update,
   );
-  server.tool(
+  register(
     "notes_delete",
-    "Trash a note (permanent=true purges irreversibly).",
+    "Trash a note (permanent=true purges irreversibly). The user is asked to confirm every call before anything is deleted.",
     deleteInput.shape,
-    wrap(h.notes_delete),
+    DESTRUCTIVE,
+    confirmedNoteDelete,
   );
-  server.tool(
+  register(
     "tags_list",
     "List all tags (uuid, title, updatedAt, noteCount, parentUuid).",
     tagsListInput.shape,
-    wrap(t.tags_list),
+    READ_ONLY,
+    t.tags_list,
   );
-  server.tool(
+  register(
     "tags_get",
     "Fetch a single tag (title, linked note UUIDs, parentUuid) by UUID.",
     tagsGetInput.shape,
-    wrap(t.tags_get),
+    READ_ONLY,
+    t.tags_get,
   );
-  server.tool(
+  register(
     "tags_create",
     "Create a new tag. Pass `parent` (tag UUID) to nest it under a folder.",
     tagsCreateInput.shape,
-    wrap(t.tags_create),
+    WRITE,
+    t.tags_create,
   );
-  server.tool(
+  register(
     "tags_update",
     "Rename a tag and/or move it in the folder hierarchy. `parent`: tag UUID to re-parent, null to detach, omit to leave unchanged.",
     tagsUpdateInput._def.schema.shape,
-    wrap(t.tags_update),
+    OVERWRITE,
+    t.tags_update,
   );
-  server.tool(
+  register(
     "tags_delete",
-    "Delete a tag (permanent — tags have no trash state).",
+    "Delete a tag (permanent — tags have no trash state). The user is asked to confirm every call before anything is deleted.",
     tagsDeleteInput.shape,
-    wrap(t.tags_delete),
+    DESTRUCTIVE,
+    confirmedTagDelete,
   );
-  server.tool(
+  register(
     "tags_attach",
     "Attach an existing tag to a note.",
     tagsAttachInput.shape,
-    wrap(t.tags_attach),
+    WRITE,
+    t.tags_attach,
   );
-  server.tool(
+  register(
     "tags_detach",
     "Remove a tag from a note.",
     tagsDetachInput.shape,
-    wrap(t.tags_detach),
+    WRITE,
+    t.tags_detach,
   );
-  server.tool(
+  register(
     "sync",
     "Force a full sync with the server. Returns decrypted note/tag counts.",
     syncInput.shape,
-    wrap(t.sync),
+    READ_ONLY,
+    t.sync,
   );
-
-  // Silence zod unused warning on strict builds
-  void z;
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  if (confirmationDisabled()) {
+    logger.warn(
+      `${CONFIRM_ENV}=off — notes_delete and tags_delete will run without asking the user`,
+    );
+  }
   logger.info("MCP StandardNotes ready on stdio");
 }
+
+export type { SnClient };
