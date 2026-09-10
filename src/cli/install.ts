@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { readFile, writeFile, copyFile, mkdir } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -203,14 +203,27 @@ async function main(): Promise<void> {
 }
 
 // Don't auto-run when imported (e.g. from login.ts or tests).
-const isMain = (() => {
+//
+// npm installs global bins as symlinks (e.g. /usr/bin/mcp-standardnotes-install
+// -> .../dist/cli/install.js). `import.meta.url` is resolved through the
+// symlink by Node's ESM loader, but `resolve(process.argv[1])` only
+// normalizes the path — it doesn't follow symlinks. Comparing those two
+// directly means this check is always false when the CLI is invoked via its
+// installed bin, so `main()` silently never runs. Resolve both sides through
+// the real filesystem path instead.
+export function isMainModule(
+  moduleUrl: string,
+  argv1: string | undefined,
+): boolean {
+  if (!argv1) return false;
   try {
-    return fileURLToPath(import.meta.url) === resolve(process.argv[1] ?? "");
+    return fileURLToPath(moduleUrl) === realpathSync(argv1);
   } catch {
     return false;
   }
-})();
-if (isMain) {
+}
+
+if (isMainModule(import.meta.url, process.argv[1])) {
   main().catch((err) => {
     process.stderr.write(
       `${err instanceof Error ? err.message : String(err)}\n`,
