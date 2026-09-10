@@ -1,6 +1,7 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // keytar is a top-level import in install.ts. Mock it so the test doesn't
@@ -14,7 +15,7 @@ vi.mock("keytar", () => ({
   },
 }));
 
-import { buildEntry, installDesktop } from "./install.js";
+import { buildEntry, installDesktop, isMainModule } from "./install.js";
 
 const fakePaths = {
   node: "/abs/path/to/node",
@@ -107,5 +108,44 @@ describe("install — installDesktop (against a tmpdir)", () => {
     await expect(
       installDesktop({ email: "a@b.co", paths: fakePaths, configPath }),
     ).rejects.toThrow(/not valid JSON/);
+  });
+});
+
+describe("install — isMainModule", () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "mcp-sn-ismain-test-"));
+  });
+
+  it("returns true when argv[1] is a symlink to the real module file", async () => {
+    // Mirrors how npm installs global bins: /usr/bin/foo -> dist/cli/foo.js.
+    const realFile = join(dir, "install.js");
+    const binSymlink = join(dir, "mcp-standardnotes-install");
+    await writeFile(realFile, "// placeholder\n");
+    await symlink(realFile, binSymlink);
+
+    const moduleUrl = pathToFileURL(realFile).href;
+    expect(isMainModule(moduleUrl, binSymlink)).toBe(true);
+  });
+
+  it("returns true when argv[1] already matches the real path directly", async () => {
+    const realFile = join(dir, "install.js");
+    await writeFile(realFile, "// placeholder\n");
+    expect(isMainModule(pathToFileURL(realFile).href, realFile)).toBe(true);
+  });
+
+  it("returns false for an unrelated file", async () => {
+    const realFile = join(dir, "install.js");
+    const otherFile = join(dir, "other.js");
+    await writeFile(realFile, "// placeholder\n");
+    await writeFile(otherFile, "// placeholder\n");
+    expect(isMainModule(pathToFileURL(realFile).href, otherFile)).toBe(false);
+  });
+
+  it("returns false instead of throwing when argv[1] is missing or nonexistent", () => {
+    const moduleUrl = pathToFileURL(join(dir, "install.js")).href;
+    expect(isMainModule(moduleUrl, undefined)).toBe(false);
+    expect(isMainModule(moduleUrl, join(dir, "does-not-exist.js"))).toBe(false);
   });
 });
