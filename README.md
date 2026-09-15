@@ -113,10 +113,12 @@ Then `/mcp` to reconnect.
 | `SN_SERVER_URL` | `https://api.standardnotes.com` | Sync server URL. Change for self-hosted instances. |
 | `KEYCHAIN_SERVICE` | `mcp-standardnotes` | Override the keychain service name (useful for multiple accounts). |
 | `SN_CERT_FINGERPRINT` | *unset* | SHA-256 TLS cert pin for self-hosted servers (64 hex chars, colons optional). See [docs/self-hosted.md](./docs/self-hosted.md). |
+| `SN_CONFIRM_DESTRUCTIVE` | `on` | `notes_delete` and `tags_delete` ask the person at the client to confirm every call (via MCP elicitation) before touching the vault. Set to `off` for headless deployments where no human is present — e.g. the [remote-agent bridge](./docs/remote-agent-bridge.md) — and restrict those tools at the client instead. |
 
 ## Security at a glance
 
 - Password in RAM only during key derivation. Never logged, never stored.
+- Deletes are gated by a human. `notes_delete` / `tags_delete` raise an MCP elicitation prompt the *user* must accept; the model cannot answer it. Clients without elicitation support get a refusal, not a silent delete. Every tool carries `readOnlyHint` / `destructiveHint` annotations so clients can apply their own policy on top.
 - Session + master key hex → OS keychain only. Never plaintext files.
 - stdio transport only. No HTTP port, ever.
 - All logs go to stderr, routed through a redactor that masks passwords, keys, JWTs, and token-like strings.
