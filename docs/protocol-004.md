@@ -37,6 +37,10 @@ Every single cryptographic primitive:
 
 No AES, no ChaCha, no KDF, no HMAC, no signing is written by hand in this repo.
 
+## Legacy 003 items (read-only)
+
+Accounts upgraded from 003 keep old notes and tags in 003 until edited. Their 003 items keys are wrapped in 004 under the root key, so reading them needs no password. [`src/sn/protocol003.ts`](../src/sn/protocol003.ts) verifies `HMAC-SHA256(ak, "003:<uuid>:<iv>:<ciphertext>")` (libsodium, constant time), checks the uuid matches the item, then decrypts AES-256-CBC with `node:crypto` (libsodium has no CBC mode). The unauthenticated 6th segment is ignored. A 003 key is never the default key, so all writes are 004.
+
 ## One-paragraph walkthrough
 
 At login: `Argon2id(password, salt = sha256(email:pw_nonce)[:16], ops=5, mem=64MB)` → 64 bytes split into `masterKey` (first 32) and `serverPassword` (last 32, hex). `serverPassword` is sent to `/v2/login` with a PKCE code verifier; `masterKey` stays local. The server returns an access_token plus a list of `SN|ItemsKey` items encrypted under `masterKey`. Each items_key (K) is used to encrypt notes and tags: a per-item random key K' is generated, the content is AEAD-encrypted under K' (XChaCha20-Poly1305 IETF), and K' itself is AEAD-encrypted under K. Payloads are serialized as `004:<nonce_hex>:<ciphertext_b64>:<aad_b64>:<additional_data_b64>`. The AAD is the UTF-8 bytes of the base64-encoded `{u: item_uuid, v: "004"}` JSON object. Signing (Ed25519 over plaintext hash) is required only for items in shared vaults; personal items use `{}` for `additional_data`.

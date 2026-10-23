@@ -56,5 +56,5 @@ Tracking what's left to implement. Items are ordered roughly by priority, not by
 ## Explicitly out of scope
 
 - **Network transport.** stdio only. See `CLAUDE.md` §3 and `.claude/rules/security.md`. Remote/HTTP would require rewriting the security model, TLS, auth, rate-limiting — and isn't worth it for a tool this personal. Users wanting mobile access should keep using the official SN app.
-- **Reimplementing any cryptographic primitive.** All primitives come from `libsodium-wrappers-sumo`. We only parse/serialize the protocol 004 framing.
+- **Reimplementing any cryptographic primitive.** All primitives come from `libsodium-wrappers-sumo` (plus `node:crypto` AES-256-CBC for legacy 003 reads). We only parse/serialize the protocol framing.
 - **Legacy 003 accounts.** Rejected at login with a clear error. Upgrade via the official app.

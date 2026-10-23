@@ -122,7 +122,7 @@ Then `/mcp` to reconnect.
 - All logs go to stderr, routed through a redactor that masks passwords, keys, JWTs, and token-like strings.
 - All tool inputs validated by zod.
 - `npm audit` HIGH/CRITICAL is a merge blocker in CI.
-- Only the protocol 004 *framing* is implemented locally; all cryptographic primitives come from `libsodium-wrappers-sumo`.
+- Only the protocol 004 *framing* is implemented locally; all cryptographic primitives come from `libsodium-wrappers-sumo`, except AES-256-CBC from `node:crypto` for reading legacy 003 items.
 
 Full threat model and deep-dive: [docs/protocol-004.md](./docs/protocol-004.md).
 Security policy, vulnerability reporting, and dependency-advisory notes: [SECURITY.md](./SECURITY.md).

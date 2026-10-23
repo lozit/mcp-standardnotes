@@ -31,6 +31,7 @@ import {
   xchachaDecrypt,
   xchachaEncrypt,
 } from "./crypto.js";
+import { decryptItemContent003, type LegacyItemsKey } from "./protocol003.js";
 import type { NoteType } from "./types.js";
 
 const SN_APP_DOMAIN = "org.standardnotes.sn";
@@ -224,11 +225,12 @@ export interface DecryptedItemsKey {
  *                    the ACTUAL items_key (K2) used to wrap other items.
  *
  * Only K2 is kept and exposed as the items_key for note decryption.
+ * 003 items keys (accounts upgraded from 003) are returned as read-only legacy keys.
  */
 export async function decryptItemsKey(
   item: EncryptedItemInput,
   rootKey: RootKey,
-): Promise<DecryptedItemsKey> {
+): Promise<DecryptedItemsKey | LegacyItemsKey> {
   const wrappingKeyHex = await decryptString(
     item.enc_item_key,
     rootKey.masterKey,
@@ -240,7 +242,22 @@ export async function decryptItemsKey(
   const content = parseDecryptedContent<{
     version?: string;
     itemsKey?: string;
+    dataAuthenticationKey?: string;
   }>(contentJson, "items_key", item.uuid);
+  if (content.version === "003") {
+    if (
+      !content.itemsKey || !/^[0-9a-f]{64}$/i.test(content.itemsKey) ||
+      !content.dataAuthenticationKey || !/^[0-9a-f]{64}$/i.test(content.dataAuthenticationKey)
+    ) {
+      throw new Error(`003 items_key content invalid for ${item.uuid}`);
+    }
+    return {
+      uuid: item.uuid,
+      itemsKey: await fromHex(content.itemsKey),
+      dataAuthenticationKey: await fromHex(content.dataAuthenticationKey),
+      version: "003",
+    };
+  }
   if (content.version && content.version !== "004") {
     throw new Error(`items_key has non-004 version: ${content.version}`);
   }
@@ -251,6 +268,32 @@ export async function decryptItemsKey(
   }
   const itemsKey = await fromHex(content.itemsKey);
   return { uuid: item.uuid, itemsKey, version: "004" };
+}
+
+async function decryptContentJson(
+  item: EncryptedItemInput,
+  itemsKeyByUuid: Map<string, Uint8Array>,
+  legacyKeys: readonly LegacyItemsKey[],
+  kind: "Note" | "Tag",
+): Promise<string> {
+  if (item.content.startsWith("003:")) {
+    return decryptItemContent003(item, legacyKeys);
+  }
+  const keyId = item.items_key_id;
+  if (!keyId) {
+    throw new Error(`${kind} ${item.uuid} has no items_key_id`);
+  }
+  const itemsKey = itemsKeyByUuid.get(keyId);
+  if (!itemsKey) {
+    throw new Error(`Unknown items_key ${keyId} for ${kind.toLowerCase()} ${item.uuid}`);
+  }
+  const itemKeyHex = await decryptString(
+    item.enc_item_key,
+    itemsKey,
+    item.uuid,
+  );
+  const perItemKey = await fromHex(itemKeyHex);
+  return decryptString(item.content, perItemKey, item.uuid);
 }
 
 export interface DecryptedNote {
@@ -275,26 +318,9 @@ export interface DecryptedNote {
 export async function decryptNote(
   item: EncryptedItemInput,
   itemsKeyByUuid: Map<string, Uint8Array>,
+  legacyKeys: readonly LegacyItemsKey[] = [],
 ): Promise<DecryptedNote> {
-  const keyId = item.items_key_id;
-  if (!keyId) {
-    throw new Error(`Note ${item.uuid} has no items_key_id`);
-  }
-  const itemsKey = itemsKeyByUuid.get(keyId);
-  if (!itemsKey) {
-    throw new Error(`Unknown items_key ${keyId} for note ${item.uuid}`);
-  }
-  const itemKeyHex = await decryptString(
-    item.enc_item_key,
-    itemsKey,
-    item.uuid,
-  );
-  const perItemKey = await fromHex(itemKeyHex);
-  const contentJson = await decryptString(
-    item.content,
-    perItemKey,
-    item.uuid,
-  );
+  const contentJson = await decryptContentJson(item, itemsKeyByUuid, legacyKeys, "Note");
   const content = parseDecryptedContent<{
     title?: string;
     text?: string;
@@ -413,26 +439,9 @@ export interface DecryptedTag {
 export async function decryptTag(
   item: EncryptedItemInput,
   itemsKeyByUuid: Map<string, Uint8Array>,
+  legacyKeys: readonly LegacyItemsKey[] = [],
 ): Promise<DecryptedTag> {
-  const keyId = item.items_key_id;
-  if (!keyId) {
-    throw new Error(`Tag ${item.uuid} has no items_key_id`);
-  }
-  const itemsKey = itemsKeyByUuid.get(keyId);
-  if (!itemsKey) {
-    throw new Error(`Unknown items_key ${keyId} for tag ${item.uuid}`);
-  }
-  const itemKeyHex = await decryptString(
-    item.enc_item_key,
-    itemsKey,
-    item.uuid,
-  );
-  const perItemKey = await fromHex(itemKeyHex);
-  const contentJson = await decryptString(
-    item.content,
-    perItemKey,
-    item.uuid,
-  );
+  const contentJson = await decryptContentJson(item, itemsKeyByUuid, legacyKeys, "Tag");
   const content = parseDecryptedContent<{
     title?: string;
     references?: Array<{

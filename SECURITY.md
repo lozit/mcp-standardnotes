@@ -30,7 +30,8 @@ back-porting to older lines while the project is pre-1.0.
 ## Security posture
 
 - **End-to-end encryption is preserved.** All cryptographic primitives come
-  from `libsodium-wrappers-sumo` (audited Argon2id + XChaCha20-Poly1305 IETF).
+  from `libsodium-wrappers-sumo` (audited Argon2id + XChaCha20-Poly1305 IETF),
+  except AES-256-CBC from `node:crypto` for reading legacy 003 items.
   Only the Standard Notes protocol 004 *framing* is implemented locally — no
   hand-rolled crypto. See [docs/protocol-004.md](./docs/protocol-004.md) for the
   threat model.

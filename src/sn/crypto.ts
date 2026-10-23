@@ -1,3 +1,4 @@
+import { createDecipheriv } from "node:crypto";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
@@ -75,6 +76,25 @@ export async function xchachaDecrypt(
     nonce,
     key,
   );
+}
+
+export async function hmacSha256Verify(
+  tag: Uint8Array,
+  message: string,
+  key: Uint8Array,
+): Promise<boolean> {
+  const s = await sodiumReady();
+  return s.crypto_auth_hmacsha256_verify(tag, message, key);
+}
+
+/** Legacy 003 reads only; libsodium has no CBC mode. Verify the HMAC first. */
+export function aes256CbcDecrypt(
+  ciphertext: Uint8Array,
+  key: Uint8Array,
+  iv: Uint8Array,
+): Uint8Array {
+  const decipher = createDecipheriv("aes-256-cbc", key, iv);
+  return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
 }
 
 export async function randomBytes(n: number): Promise<Uint8Array> {

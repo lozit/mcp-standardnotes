@@ -186,6 +186,42 @@ describe("protocol004 primitives", () => {
     expect(await toHex(k.itemsKey)).toBe(await toHex(realItemsKey));
   });
 
+  it("returns a 003 items_key (from an account upgraded to 004) as read-only legacy key material", async () => {
+    await sodiumReady();
+    const masterKey = await randomBytes(32);
+    const wrappingKey = await generateItemsKeyRaw();
+    const itemsKeyUuid = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+    const aad = { u: itemsKeyUuid, v: "004", kp: { version: "004" } };
+    const ek = await toHex(await randomBytes(32));
+    const ak = await toHex(await randomBytes(32));
+    const fakeRootKey = {
+      masterKey,
+      serverPassword: "00".repeat(32),
+      keyParams: { version: "004" as const, identifier: "u", pw_nonce: "n" },
+    };
+    const item = async (body: Record<string, unknown>) => ({
+      uuid: itemsKeyUuid,
+      content_type: "SN|ItemsKey",
+      enc_item_key: await encryptString(await toHex(wrappingKey), masterKey, aad),
+      content: await encryptString(JSON.stringify(body), wrappingKey, aad),
+    });
+
+    const k = await decryptItemsKey(
+      await item({ version: "003", itemsKey: ek, dataAuthenticationKey: ak }),
+      fakeRootKey,
+    );
+    expect(k.version).toBe("003");
+    expect(await toHex(k.itemsKey)).toBe(ek);
+    expect(k.version === "003" && (await toHex(k.dataAuthenticationKey))).toBe(ak);
+
+    await expect(
+      decryptItemsKey(await item({ version: "003", itemsKey: ek }), fakeRootKey),
+    ).rejects.toThrow(/003 items_key content invalid/);
+    await expect(
+      decryptItemsKey(await item({ version: "002", itemsKey: ek }), fakeRootKey),
+    ).rejects.toThrow(/non-004 version: 002/);
+  });
+
   it("raises a named error (not a bare SyntaxError) when decrypted content isn't JSON", async () => {
     await sodiumReady();
     const masterKey = await randomBytes(32);

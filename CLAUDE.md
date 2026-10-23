@@ -3,7 +3,7 @@
 MCP (Model Context Protocol) server that lets Claude interact with a Standard Notes account (read, create, edit, delete notes and tags) while preserving Standard Notes' end-to-end encryption (E2EE).
 
 <important if="working on encryption or authentication">
-NEVER reimplement a cryptographic primitive by hand (no AES, no ChaCha, no custom KDF). Primitives come exclusively from `libsodium-wrappers-sumo` (audited, Argon2id + XChaCha20-Poly1305 IETF).
+NEVER reimplement a cryptographic primitive by hand (no AES, no ChaCha, no custom KDF). Primitives come exclusively from `libsodium-wrappers-sumo` (audited, Argon2id + XChaCha20-Poly1305 IETF), except AES-256-CBC from `node:crypto` for read-only legacy 003 items.
 
 What is implemented locally = only the **Standard Notes protocol 004 framing** (payload format `004:<nonce>:<ciphertext>:<aad>`, root key derivation → masterKey/serverPassword, items_key wrap/unwrap). That's parsing/serialization of a documented public format, not new cryptography.
 
