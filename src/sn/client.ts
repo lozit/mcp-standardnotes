@@ -724,16 +724,17 @@ function buildClient(state: ClientState): SnClient {
         byNoteType[n.noteType] = (byNoteType[n.noteType] ?? 0) + 1;
         const bytes = Buffer.byteLength(n.text, "utf8");
         totalTextBytes += bytes;
+        const title = n.protected ? "[Protected]" : n.title;
         if (!largest || bytes > largest.bytes) {
-          largest = { uuid: n.uuid, title: n.title, bytes };
+          largest = { uuid: n.uuid, title, bytes };
         }
         if (n.created_at_timestamp > 0 && n.created_at_timestamp < oldestTs) {
           oldestTs = n.created_at_timestamp;
-          oldest = { uuid: n.uuid, title: n.title, createdAt: n.createdAt };
+          oldest = { uuid: n.uuid, title, createdAt: n.createdAt };
         }
         if (n.updated_at_timestamp > newestTs) {
           newestTs = n.updated_at_timestamp;
-          newest = { uuid: n.uuid, title: n.title, updatedAt: n.updatedAt };
+          newest = { uuid: n.uuid, title, updatedAt: n.updatedAt };
         }
       }
       return {
@@ -764,7 +765,8 @@ function buildClient(state: ClientState): SnClient {
       const q = query.toLowerCase();
       const hits: DecryptedNote[] = [];
       for (const n of state.notesCache.values()) {
-        if (n.trashed) continue;
+        // A masked hit would still reveal that the protected note matches.
+        if (n.trashed || n.protected) continue;
         if (n.title.toLowerCase().includes(q) || n.text.toLowerCase().includes(q)) {
           hits.push(n);
           if (hits.length >= limit * 4) break;

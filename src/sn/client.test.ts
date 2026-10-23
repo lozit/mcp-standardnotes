@@ -30,8 +30,10 @@ vi.mock("./session.js", () => ({
   deleteSession: vi.fn(),
 }));
 
-import { SnApiError } from "./http.js";
+import { SnApiError, type RawItem } from "./http.js";
 import { createClientFromLogin, createClientFromSession } from "./client.js";
+import { encryptString } from "./protocol004.js";
+import { randomBytes, toHex } from "./crypto.js";
 
 describe("createClientFromSession bootstrap", () => {
   afterEach(() => {
@@ -172,5 +174,71 @@ describe("createClientFromLogin MFA handling", () => {
     ).rejects.toThrow(/Two-factor authentication is enabled/);
 
     expect(loginMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("protected notes in read paths", () => {
+  afterEach(() => {
+    syncMock.mockReset();
+    loadSessionMock.mockReset();
+  });
+
+  // Synthetic vault: random keys, no account or network.
+  async function encryptedItem(
+    uuid: string,
+    contentType: string,
+    content: Record<string, unknown>,
+    wrappingKey: Uint8Array,
+    itemsKeyId: string | null,
+    timestamp = 1,
+  ): Promise<RawItem> {
+    const itemKey = await randomBytes(32);
+    const aad = { u: uuid, v: "004" };
+    return {
+      uuid,
+      content_type: contentType,
+      content: await encryptString(JSON.stringify(content), itemKey, aad),
+      enc_item_key: await encryptString(await toHex(itemKey), wrappingKey, aad),
+      items_key_id: itemsKeyId,
+      created_at_timestamp: timestamp,
+      updated_at_timestamp: timestamp,
+    } as RawItem;
+  }
+
+  async function clientWithProtectedNote() {
+    const masterKey = await randomBytes(32);
+    const itemsKey = await randomBytes(32);
+    const keyId = "11111111-1111-4111-8111-111111111111";
+    const items = [
+      await encryptedItem(keyId, "SN|ItemsKey", { version: "004", itemsKey: await toHex(itemsKey) }, masterKey, null),
+      await encryptedItem("22222222-2222-4222-8222-222222222222", "Note",
+        { title: "Open", text: "the needle", references: [] }, itemsKey, keyId, 5),
+      await encryptedItem("33333333-3333-4333-8333-333333333333", "Note",
+        { title: "Vault", text: "the needle is also here", references: [], protected: true }, itemsKey, keyId, 1),
+    ];
+    items[2] = { ...items[2]!, updated_at_timestamp: 9 };
+    loadSessionMock.mockResolvedValue({
+      serverUrl: "https://example.test",
+      email: "a@b.co",
+      sessionPayload: { access_token: "tok", refresh_token: "ref" },
+      masterKeyHex: await toHex(masterKey),
+      keyParams: { version: "004", identifier: "a@b.co", pw_nonce: "n" },
+      syncToken: null,
+      savedAt: new Date().toISOString(),
+    });
+    syncMock.mockResolvedValue({ retrieved_items: items, saved_items: [], conflicts: [], sync_token: "t" });
+    return createClientFromSession({ serverUrl: "https://example.test", email: "a@b.co" });
+  }
+
+  it("search does not match protected notes, whose presence in results would leak their content", async () => {
+    const client = await clientWithProtectedNote();
+    expect((await client.searchNotes("needle", 10)).map((n) => n.title)).toEqual(["Open"]);
+    expect(await client.searchNotes("Vault", 10)).toEqual([]);
+  });
+
+  it("stats masks a protected note's title", async () => {
+    const stats = await (await clientWithProtectedNote()).stats();
+    expect([stats.largest?.title, stats.oldest?.title, stats.newest?.title])
+      .toEqual(["[Protected]", "[Protected]", "[Protected]"]);
   });
 });
